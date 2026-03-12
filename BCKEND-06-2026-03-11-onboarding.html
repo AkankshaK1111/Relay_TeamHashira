@@ -1,0 +1,1594 @@
+<!--
+BCKEND-06-2026-03-11-onboarding.html
+Relay — Onboarding Flow (Standalone)
+Date: 2026-03-11
+Contains: 7-step onboarding: Welcome > Email (hard gate) > Calendar > Tracker > Ingestion > Classify > Mapping+Complete
+Note: For the full connected experience (onboarding flows into app), use BCKEND-05
+Design system: cream/ivory light theme, ember accent
+Rule: NO dark backgrounds ever.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay — Onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #16120E;
+  --ink-2: #4A4238;
+  --ink-3: #8C7E72;
+  --parchment: #F7F3EE;
+  --parchment-2: #EDE7DF;
+  --parchment-3: #E2D9CE;
+  --border: #D8CEC3;
+  --border-strong: #C0B3A4;
+  --ember: #C0460A;
+  --ember-light: #F5E4DA;
+  --ember-mid: #E0855A;
+  --green: #2E6E48;
+  --green-light: #DEF0E6;
+  --amber: #9A6A0A;
+  --amber-light: #F5EACC;
+  --blue: #1E4E7A;
+  --blue-light: #DDE9F5;
+  --r: 10px;
+  --r-sm: 6px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--parchment);
+  color: var(--ink);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* PROGRESS BAR */
+.progress-bar-wrap {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--parchment-3);
+  z-index: 100;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--ember);
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* NAV */
+.onboard-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: 18px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 50;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.3px;
+}
+.logo em { color: var(--ember); font-style: italic; }
+
+.step-counter {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.5px;
+}
+
+.skip-link {
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+.skip-link:hover { color: var(--ink-2); }
+
+/* SCREENS */
+.screen {
+  display: none;
+  min-height: 100vh;
+  padding-top: 72px;
+  align-items: center;
+  justify-content: center;
+}
+.screen.active {
+  display: flex;
+  animation: screenIn 0.35s cubic-bezier(0.4,0,0.2,1) both;
+}
+
+@keyframes screenIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.screen-inner {
+  width: 100%;
+  max-width: 560px;
+  padding: 40px 20px 60px;
+}
+
+.screen-inner.wide { max-width: 760px; }
+
+/* TYPOGRAPHY */
+.eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ember);
+  margin-bottom: 14px;
+}
+
+h1.display {
+  font-family: 'Fraunces', serif;
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+
+h1.display em {
+  font-style: italic;
+  color: var(--ember);
+}
+
+h2.section-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+h2.section-title em { font-style: italic; color: var(--ember); }
+
+.subtitle {
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+/* FORM ELEMENTS */
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.input-field {
+  width: 100%;
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14.5px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-field:focus {
+  border-color: var(--ember);
+  box-shadow: 0 0 0 3px var(--ember-light);
+}
+.input-field::placeholder { color: var(--ink-3); }
+
+.field-hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 6px;
+}
+
+.field-group { margin-bottom: 22px; }
+
+/* CONNECT CARD */
+.connect-card {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.connect-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+.connect-card.connected {
+  border-color: var(--green);
+  background: #FAFEF8;
+}
+.connect-card.connecting {
+  border-color: var(--ember);
+  background: var(--ember-light);
+}
+
+.connect-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--parchment-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.connect-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.connect-desc {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.connect-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-connect {
+  background: var(--ink);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+.btn-connect:hover { background: var(--ink-2); }
+
+.connected-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--green-light);
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+.optional-badge {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  background: var(--parchment-2);
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.required-badge {
+  font-size: 10.5px;
+  color: var(--ember);
+  background: var(--ember-light);
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+/* PROGRESS DOTS */
+.connecting-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.dot-pulse {
+  width: 5px; height: 5px;
+  background: var(--ember);
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.dot-pulse:nth-child(2) { animation-delay: 0.2s; }
+.dot-pulse:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+/* BUTTONS */
+.btn-primary {
+  background: var(--ink);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover { background: #2A2520; }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary.ember { background: var(--ember); }
+.btn-primary.ember:hover { background: #A83A06; }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1.5px solid var(--border-strong);
+  padding: 13px 24px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+.btn-secondary:hover { background: var(--parchment-2); color: var(--ink); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-3);
+  border: none;
+  padding: 13px 20px;
+  font-size: 13.5px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: color 0.15s;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+.btn-ghost:hover { color: var(--ink-2); }
+
+.btn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+/* INTERSTITIAL — INGESTION LOADING */
+.ingestion-panel {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.ingestion-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--parchment-2);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: all 0.4s;
+}
+.ingestion-row:last-child { border-bottom: none; }
+.ingestion-row.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.ingestion-icon {
+  font-size: 18px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ingestion-text {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.ingestion-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.ingestion-bar-wrap {
+  height: 4px;
+  background: var(--parchment-2);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.ingestion-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ember);
+  width: 0%;
+  transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* CONTACT CLASSIFY */
+.contact-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.contact-row.classified { opacity: 0.5; }
+
+.contact-initials {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--parchment-2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Fraunces', serif;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.contact-info { flex: 1; }
+.contact-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+.contact-meta { font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+
+.classify-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.classify-btn {
+  padding: 5px 11px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.classify-btn:hover { border-color: var(--border-strong); color: var(--ink); background: var(--parchment-2); }
+.classify-btn.prospect { border-color: var(--green); color: var(--green); background: var(--green-light); }
+.classify-btn.not-prospect { border-color: var(--border-strong); color: var(--ink-3); background: var(--parchment-2); }
+
+.skip-all {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  margin-top: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+.skip-all:hover { color: var(--ink-2); }
+
+/* MAPPING SCREEN */
+.mapping-card {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.mapping-header {
+  padding: 14px 18px;
+  background: var(--parchment-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mapping-source {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--ink-3);
+}
+
+.mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--parchment-2);
+}
+.mapping-row:last-child { border-bottom: none; }
+
+.mapping-col {
+  flex: 1;
+  font-size: 13.5px;
+}
+
+.mapping-col-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+
+.mapping-raw {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--parchment-2);
+  padding: 5px 9px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.mapping-arrow {
+  padding: 0 16px;
+  color: var(--ink-3);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.mapping-result {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.confidence-high {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--green-light);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.confidence-med {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--amber);
+  background: var(--amber-light);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.confidence-low {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ember);
+  background: var(--ember-light);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.mapping-select {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: white;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  width: 180px;
+}
+.mapping-select:focus { border-color: var(--ember); }
+
+.confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--amber-light);
+  border-top: 1px solid var(--amber-light);
+}
+.confirm-question {
+  font-size: 13px;
+  color: var(--amber);
+  flex: 1;
+}
+.confirm-btns { display: flex; gap: 8px; }
+.btn-confirm {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  border: none;
+  transition: all 0.15s;
+}
+.btn-yes { background: var(--green); color: white; }
+.btn-yes:hover { background: #256040; }
+.btn-no { background: var(--parchment-3); color: var(--ink-2); }
+.btn-no:hover { background: var(--border); }
+
+/* WRITE-BACK OPT-IN */
+.writeback-preview {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin: 20px 0;
+}
+
+.writeback-preview-header {
+  background: var(--parchment-2);
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Mono', monospace;
+}
+
+.notion-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--parchment-2);
+  font-size: 12.5px;
+}
+.notion-row:last-child { border-bottom: none; }
+.notion-row.header { background: var(--parchment-2); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-3); }
+
+.notion-cell {
+  padding: 10px 14px;
+  border-right: 1px solid var(--parchment-2);
+  color: var(--ink-2);
+}
+.notion-cell:last-child { border-right: none; }
+.notion-cell.new {
+  color: var(--green);
+  font-weight: 500;
+  background: #F5FBF7;
+}
+.notion-cell.new::before { content: '+ '; color: var(--green); }
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--parchment-2);
+}
+.rule-item:last-child { border-bottom: none; }
+.rule-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.rule-text { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.rule-text strong { color: var(--ink); }
+
+/* COMPLETION */
+.completion-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.stat-box {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px 16px;
+  text-align: center;
+}
+
+.stat-val {
+  font-family: 'Fraunces', serif;
+  font-size: 34px;
+  font-weight: 400;
+  color: var(--ink);
+  display: block;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.warmth-preview {
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.warmth-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--parchment-2);
+  font-size: 13.5px;
+}
+.warmth-row:last-child { border-bottom: none; }
+
+.warmth-name { flex: 1; font-weight: 500; color: var(--ink); }
+.warmth-co { font-size: 12px; color: var(--ink-3); }
+
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.chip-hot { background: #FDE8E0; color: #B83A1A; }
+.chip-warm { background: var(--amber-light); color: var(--amber); }
+.chip-cooling { background: var(--blue-light); color: var(--blue); }
+.chip-cold { background: var(--parchment-3); color: var(--ink-3); }
+
+/* SETUP INDICATOR */
+.setup-indicator {
+  background: var(--amber-light);
+  border: 1.5px solid #E0C070;
+  border-radius: var(--r-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--amber);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.setup-indicator strong { color: var(--ink); }
+
+/* DIVIDER */
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.or-divider::before, .or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* TOOLTIP */
+.tooltip-note {
+  font-size: 12px;
+  color: var(--ink-3);
+  background: var(--parchment-2);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
+/* STEP INDICATOR */
+.step-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 36px;
+}
+.step-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--parchment-3);
+  transition: all 0.3s;
+}
+.step-dot.done { background: var(--green); }
+.step-dot.active { background: var(--ember); width: 24px; border-radius: 4px; }
+.step-dot.upcoming { background: var(--parchment-3); }
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  background: var(--ink);
+  color: white;
+  padding: 12px 18px;
+  border-radius: var(--r);
+  font-size: 13px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-check { color: #6FDC9F; }
+
+</style>
+</head>
+<body>
+
+<div class="progress-bar-wrap">
+  <div class="progress-bar-fill" id="progress-fill" style="width:14%"></div>
+</div>
+
+<nav class="onboard-nav">
+  <div class="logo">Relay<em>.</em></div>
+  <div class="step-counter" id="step-counter">Step 1 of 7</div>
+  <div class="skip-link" id="skip-btn" onclick="skipStep()" style="visibility:hidden">Skip for now</div>
+</nav>
+
+<!-- ============================================================ -->
+<!-- STEP 1 — WELCOME -->
+<!-- ============================================================ -->
+<div class="screen active" id="step-1">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Welcome to Relay</div>
+    <h1 class="display">The CRM that works<br>while <em>you're selling.</em></h1>
+    <p class="subtitle">No logging. No manual updates. Relay reads your email and calendar, figures out who needs attention today, and keeps your Notion updated — without you touching it.</p>
+
+    <p class="subtitle" style="font-size:13px; color:var(--ink-3); margin-top:-16px; margin-bottom:28px;">Takes about 3 minutes to set up. Start by connecting your email — everything else can wait.</p>
+
+    <div class="field-group">
+      <div class="field-label">Your name</div>
+      <input class="input-field" type="text" placeholder="Arjun Dev" id="founder-name">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Your startup</div>
+      <input class="input-field" type="text" placeholder="Kodo" id="startup-name">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary ember" onclick="goTo(2)">Get started →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 2 — EMAIL (HARD GATE) -->
+<!-- ============================================================ -->
+<div class="screen" id="step-2">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Step 1 — Required</div>
+    <h2 class="section-title">Connect your <em>email.</em></h2>
+    <p class="subtitle">Everything in Relay runs on this. We read 6 months of thread history to build your contact list, warmth scores, and follow-up queue — retroactively, on day one.</p>
+
+    <div class="connect-card" id="gmail-card" onclick="connectEmail('gmail')">
+      <div class="connect-icon">📧</div>
+      <div>
+        <div class="connect-name">Gmail / Google Workspace</div>
+        <div class="connect-desc">Connects via Nylas · Read-only · OAuth</div>
+      </div>
+      <div class="connect-status">
+        <span class="required-badge">Required</span>
+        <button class="btn-connect" onclick="connectEmail('gmail'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="outlook-card" onclick="connectEmail('outlook')">
+      <div class="connect-icon">📬</div>
+      <div>
+        <div class="connect-name">Outlook / Microsoft 365</div>
+        <div class="connect-desc">Connects via Nylas · Read-only · OAuth</div>
+      </div>
+      <div class="connect-status">
+        <span class="required-badge">Required</span>
+        <button class="btn-connect" onclick="connectEmail('outlook'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="apple-card" onclick="connectEmail('apple')">
+      <div class="connect-icon">🍎</div>
+      <div>
+        <div class="connect-name">Apple Mail / iCloud</div>
+        <div class="connect-desc">Connects via Nylas · Read-only · App password</div>
+      </div>
+      <div class="connect-status">
+        <span class="required-badge">Required</span>
+        <button class="btn-connect" onclick="connectEmail('apple'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="tooltip-note">🔒 Relay reads email metadata and thread content to extract deal context. We never store raw email content on our servers. Your data is processed in-flight and stored only as structured records.</div>
+
+    <div class="btn-row" id="email-next-row" style="display:none">
+      <button class="btn-primary ember" onclick="goTo(3)">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 3 — CALENDAR -->
+<!-- ============================================================ -->
+<div class="screen" id="step-3">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Step 2 — Strongly recommended</div>
+    <h2 class="section-title">Connect your <em>calendar.</em></h2>
+    <p class="subtitle">Your calendar is the trigger layer. When a meeting ends, Relay drafts the follow-up and reconstructs context. Without it, call-end automations don't fire.</p>
+
+    <div class="connect-card" id="gcal-card" onclick="connectCal('gcal')">
+      <div class="connect-icon">📅</div>
+      <div>
+        <div class="connect-name">Google Calendar</div>
+        <div class="connect-desc">Connects via Cronofy · Read events + triggers</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Recommended</span>
+        <button class="btn-connect" onclick="connectCal('gcal'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="outlook-cal-card" onclick="connectCal('outlook-cal')">
+      <div class="connect-icon">🗓️</div>
+      <div>
+        <div class="connect-name">Outlook Calendar</div>
+        <div class="connect-desc">Connects via Cronofy · Read events + triggers</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Recommended</span>
+        <button class="btn-connect" onclick="connectCal('outlook-cal'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="calendly-card" onclick="connectCal('calendly')">
+      <div class="connect-icon">🔗</div>
+      <div>
+        <div class="connect-name">Calendly / Cal.com</div>
+        <div class="connect-desc">Catches scheduling-link meetings Relay would otherwise miss</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Optional</span>
+        <button class="btn-connect" onclick="connectCal('calendly'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary ember" onclick="goTo(4)" id="cal-continue">Continue →</button>
+      <button class="btn-ghost" onclick="goTo(4)">Skip — add later</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 4 — NOTION / SHEETS / AIRTABLE -->
+<!-- ============================================================ -->
+<div class="screen" id="step-4">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Step 3 — Strongly recommended</div>
+    <h2 class="section-title">Connect your deal <em>tracker.</em></h2>
+    <p class="subtitle">Your Notion, Sheets, or Airtable tracker is the best source of truth we have on day one. We'll read your existing contacts and notes — no cold start. Relay also writes back after every call.</p>
+
+    <div class="connect-card" id="notion-card" onclick="connectTracker('notion')">
+      <div class="connect-icon">📓</div>
+      <div>
+        <div class="connect-name">Notion</div>
+        <div class="connect-desc">Database mode + free-form pages · Read + write-back</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Recommended</span>
+        <button class="btn-connect" onclick="connectTracker('notion'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="sheets-card" onclick="connectTracker('sheets')">
+      <div class="connect-icon">📊</div>
+      <div>
+        <div class="connect-name">Google Sheets</div>
+        <div class="connect-desc">Lead tracker / deal tracker sheets · Read + write-back</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Optional</span>
+        <button class="btn-connect" onclick="connectTracker('sheets'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="connect-card" id="airtable-card" onclick="connectTracker('airtable')">
+      <div class="connect-icon">🗂️</div>
+      <div>
+        <div class="connect-name">Airtable</div>
+        <div class="connect-desc">Best data quality of the three · Read + write-back</div>
+      </div>
+      <div class="connect-status">
+        <span class="optional-badge">Optional</span>
+        <button class="btn-connect" onclick="connectTracker('airtable'); event.stopPropagation()">Connect</button>
+      </div>
+    </div>
+
+    <div class="or-divider">or</div>
+
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="btn-secondary" style="flex:1;">Upload CSV</button>
+      <span style="font-size:12.5px; color:var(--ink-3); flex:2; line-height:1.5;">Have a spreadsheet? Export it as CSV and we'll import your contacts and notes directly.</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary ember" onclick="goTo(5)">Continue →</button>
+      <button class="btn-ghost" onclick="goTo(5)">Skip — add later</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 5 — INGESTION INTERSTITIAL (30–45 sec) -->
+<!-- ============================================================ -->
+<div class="screen" id="step-5">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Reading your history</div>
+    <h2 class="section-title">Building your <em>baseline.</em></h2>
+    <p class="subtitle">We're scanning 6 months of email and calendar history. This takes about 30 seconds and only happens once.</p>
+
+    <div class="ingestion-panel" id="ingestion-panel">
+      <div class="ingestion-row" id="ing-1">
+        <div class="ingestion-icon">📧</div>
+        <div class="ingestion-text">
+          Email threads scanned
+          <div class="ingestion-bar-wrap"><div class="ingestion-bar" id="bar-1"></div></div>
+        </div>
+        <div class="ingestion-count" id="count-1">—</div>
+      </div>
+      <div class="ingestion-row" id="ing-2">
+        <div class="ingestion-icon">📅</div>
+        <div class="ingestion-text">
+          Meetings analysed
+          <div class="ingestion-bar-wrap"><div class="ingestion-bar" id="bar-2"></div></div>
+        </div>
+        <div class="ingestion-count" id="count-2">—</div>
+      </div>
+      <div class="ingestion-row" id="ing-3">
+        <div class="ingestion-icon">📓</div>
+        <div class="ingestion-text">
+          Contacts imported from Notion
+          <div class="ingestion-bar-wrap"><div class="ingestion-bar" id="bar-3"></div></div>
+        </div>
+        <div class="ingestion-count" id="count-3">—</div>
+      </div>
+      <div class="ingestion-row" id="ing-4">
+        <div class="ingestion-icon">🧠</div>
+        <div class="ingestion-text">
+          Warmth scores computed
+          <div class="ingestion-bar-wrap"><div class="ingestion-bar" id="bar-4"></div></div>
+        </div>
+        <div class="ingestion-count" id="count-4">—</div>
+      </div>
+      <div class="ingestion-row" id="ing-5">
+        <div class="ingestion-icon">✦</div>
+        <div class="ingestion-text">
+          Contacts identified as prospects
+          <div class="ingestion-bar-wrap"><div class="ingestion-bar" id="bar-5"></div></div>
+        </div>
+        <div class="ingestion-count" id="count-5">—</div>
+      </div>
+    </div>
+
+    <div id="ingestion-done" style="display:none;">
+      <div class="setup-indicator" style="background:var(--green-light); border-color:#A8D8C0; color:var(--green);">
+        <span>✓</span>
+        <span><strong>Done.</strong> We found 34 contacts and scored them. Let's quickly check the ones we flagged as prospects.</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary ember" onclick="goTo(6)">Review contacts →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 6 — CONTACT CLASSIFY (interstitial: one-tap) -->
+<!-- ============================================================ -->
+<div class="screen" id="step-6">
+  <div class="screen-inner">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot upcoming"></div>
+    </div>
+
+    <div class="eyebrow">Quick check — 30 seconds</div>
+    <h2 class="section-title">Are these <em>prospects?</em></h2>
+    <p class="subtitle">We flagged 6 contacts from your email history as likely prospects. Tap to confirm or dismiss. You can edit this any time.</p>
+
+    <div id="contact-list">
+      <div class="contact-row" id="cr-1">
+        <div class="contact-initials">PM</div>
+        <div class="contact-info">
+          <div class="contact-name">Priya Mehta</div>
+          <div class="contact-meta">Vantara · 4 email threads · last: 3 days ago</div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-1','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-1','not')">Not a prospect</button>
+        </div>
+      </div>
+
+      <div class="contact-row" id="cr-2">
+        <div class="contact-initials">ML</div>
+        <div class="contact-info">
+          <div class="contact-name">Marcus Lee</div>
+          <div class="contact-meta">Orion Systems · 7 threads · last: today</div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-2','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-2','not')">Not a prospect</button>
+        </div>
+      </div>
+
+      <div class="contact-row" id="cr-3">
+        <div class="contact-initials">RS</div>
+        <div class="contact-info">
+          <div class="contact-name">Rahul Sharma</div>
+          <div class="contact-meta">Nexgen · 5 threads · 1 meeting · last: 4 days ago</div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-3','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-3','not')">Not a prospect</button>
+        </div>
+      </div>
+
+      <div class="contact-row" id="cr-4">
+        <div class="contact-initials">DN</div>
+        <div class="contact-info">
+          <div class="contact-name">Deepa Nair</div>
+          <div class="contact-meta">Uplift · 3 threads · 1 meeting · last: 5 days ago</div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-4','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-4','not')">Not a prospect</button>
+        </div>
+      </div>
+
+      <div class="contact-row" id="cr-5">
+        <div class="contact-initials">TG</div>
+        <div class="contact-info">
+          <div class="contact-name">Tanvi Gupta</div>
+          <div class="contact-meta">Clearfield · 2 threads · last: 18 days ago</div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-5','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-5','not')">Not a prospect</button>
+        </div>
+      </div>
+
+      <div class="contact-row" id="cr-6">
+        <div class="contact-initials">AS</div>
+        <div class="contact-info">
+          <div class="contact-name">Aarav Singh</div>
+          <div class="contact-meta">Techflow · 1 thread · last: 9 days ago — <em style="color:var(--ink-3)">not sure</em></div>
+        </div>
+        <div class="classify-btns">
+          <button class="classify-btn" onclick="classify('cr-6','prospect')">Prospect ✓</button>
+          <button class="classify-btn" onclick="classify('cr-6','not')">Not a prospect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="skip-all" onclick="goTo(7)">Skip all — I'll review in the app</div>
+
+    <div class="btn-row" id="classify-continue" style="display:none;">
+      <button class="btn-primary ember" onclick="goTo(7)">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 7 — WRITE-BACK + MAPPING + COMPLETE -->
+<!-- ============================================================ -->
+<div class="screen" id="step-7">
+  <div class="screen-inner wide">
+    <div class="step-dots">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+    </div>
+
+    <div class="eyebrow">Almost done</div>
+    <h2 class="section-title">One last thing — <em>write-back.</em></h2>
+    <p class="subtitle">After every call, Relay will append a summary to your Notion. Here's a preview of exactly what that looks like — and the rules it follows.</p>
+
+    <div class="writeback-preview">
+      <div class="writeback-preview-header">
+        📓 Your Notion — "Sales Pipeline" database — preview of first write
+      </div>
+      <div class="notion-row header">
+        <div class="notion-cell">Contact</div>
+        <div class="notion-cell">Stage</div>
+        <div class="notion-cell">Last contact</div>
+        <div class="notion-cell">Notes</div>
+      </div>
+      <div class="notion-row">
+        <div class="notion-cell">Priya Mehta</div>
+        <div class="notion-cell">Proposal Sent</div>
+        <div class="notion-cell">28 Feb</div>
+        <div class="notion-cell">Good call. Following up.</div>
+      </div>
+      <div class="notion-row">
+        <div class="notion-cell">Priya Mehta</div>
+        <div class="notion-cell">Proposal Sent</div>
+        <div class="notion-cell new">11 Mar ← updated</div>
+        <div class="notion-cell new">Good call. Following up. ↵ [Relay · 11 Mar] Pricing call, 45 min. Annual vs monthly discussed. Follow-up sent same day. No reply in 12 days.</div>
+      </div>
+    </div>
+
+    <div style="background:white; border:1.5px solid var(--border); border-radius:var(--r); padding:16px 18px; margin-bottom:20px;">
+      <div class="rule-item">
+        <div class="rule-icon">➕</div>
+        <div class="rule-text"><strong>Append only.</strong> Relay never overwrites or edits your existing notes. Everything is added as a new timestamped entry below what's already there.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-icon">👁️</div>
+        <div class="rule-text"><strong>Stage changes always need your approval.</strong> Relay will never change your deal stage silently — it shows you the change and you approve it with one tap.</div>
+      </div>
+      <div class="rule-item">
+        <div class="rule-icon">↩️</div>
+        <div class="rule-text"><strong>Reversible.</strong> Every write is logged. You can undo any entry from the Pending queue at any time.</div>
+      </div>
+      <div class="rule-item" style="border-bottom:none;">
+        <div class="rule-icon">🏆</div>
+        <div class="rule-text"><strong>Your edits always win.</strong> If you update a field in Notion, Relay never overwrites it — your version always takes priority.</div>
+      </div>
+    </div>
+
+    <!-- MAPPING PREVIEW — MEDIUM CONFIDENCE ITEMS -->
+    <h2 class="section-title" style="font-size:22px; margin-bottom:8px;">One mapping to <em>confirm.</em></h2>
+    <p class="subtitle" style="margin-bottom:18px;">We mapped most of your Notion columns automatically. One column we're not sure about — does this look right?</p>
+
+    <div class="mapping-card">
+      <div class="mapping-header">
+        <span>📓</span>
+        <div class="mapping-source">Notion · Sales Pipeline</div>
+      </div>
+
+      <div class="mapping-row">
+        <div class="mapping-col">
+          <div class="mapping-col-label">Your column name</div>
+          <div class="mapping-raw">Status</div>
+        </div>
+        <div class="mapping-arrow">→</div>
+        <div class="mapping-col">
+          <div class="mapping-col-label">Relay maps to</div>
+          <div class="mapping-result">Deal Stage <span class="confidence-high">✓ Auto-mapped</span></div>
+        </div>
+      </div>
+
+      <div class="mapping-row">
+        <div class="mapping-col">
+          <div class="mapping-col-label">Your column name</div>
+          <div class="mapping-raw">Next Step</div>
+        </div>
+        <div class="mapping-arrow">→</div>
+        <div class="mapping-col">
+          <div class="mapping-col-label">Relay maps to</div>
+          <div class="mapping-result">Next action <span class="confidence-high">✓ Auto-mapped</span></div>
+        </div>
+      </div>
+
+      <div class="mapping-row" style="background:#FFFBF3;">
+        <div class="mapping-col">
+          <div class="mapping-col-label">Your column name</div>
+          <div class="mapping-raw">Priority</div>
+        </div>
+        <div class="mapping-arrow">→</div>
+        <div class="mapping-col">
+          <div class="mapping-col-label">Relay thinks this is…</div>
+          <select class="mapping-select" id="priority-map">
+            <option value="urgency">Deal urgency signal</option>
+            <option value="value">Deal value</option>
+            <option value="custom">Custom tag (read-only)</option>
+            <option value="ignore">Ignore this column</option>
+          </select>
+          <span class="confidence-med">? Confirm</span>
+        </div>
+      </div>
+
+      <div class="confirm-row">
+        <div class="confirm-question">Does "Priority" map to deal urgency signal?</div>
+        <div class="confirm-btns">
+          <button class="btn-confirm btn-yes" onclick="confirmMapping()">Looks right ✓</button>
+          <button class="btn-confirm btn-no" onclick="document.getElementById('priority-map').focus()">Change it</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mapping-confirmed" style="display:none; margin-bottom:16px;">
+      <div class="setup-indicator" style="background:var(--green-light); border-color:#A8D8C0; color:var(--green);">
+        ✓ Mapping confirmed — Relay will use your Notion as the primary write-back target.
+      </div>
+    </div>
+
+    <!-- COMPLETION -->
+    <div id="completion-block" style="margin-top:32px;">
+      <h2 class="section-title" style="font-size:22px; margin-bottom:8px;">You're <em>ready.</em></h2>
+      <p class="subtitle" style="margin-bottom:20px;">Here's what Relay found in your history. Your Today view is waiting.</p>
+
+      <div class="completion-stats">
+        <div class="stat-box">
+          <span class="stat-val">34</span>
+          <span class="stat-label">Contacts found</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-val">18</span>
+          <span class="stat-label">Active deals</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-val">5</span>
+          <span class="stat-label">Need attention today</span>
+        </div>
+      </div>
+
+      <div class="warmth-preview">
+        <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink-3); margin-bottom:8px;">Top deals by urgency</div>
+        <div class="warmth-row">
+          <div><div class="warmth-name">Priya Mehta</div><div class="warmth-co">Vantara · 12 days silent</div></div>
+          <span class="chip chip-cooling">Cooling</span>
+        </div>
+        <div class="warmth-row">
+          <div><div class="warmth-name">Marcus Lee</div><div class="warmth-co">Orion Systems · Call ended today</div></div>
+          <span class="chip chip-hot">Hot</span>
+        </div>
+        <div class="warmth-row">
+          <div><div class="warmth-name">Rahul Sharma</div><div class="warmth-co">Nexgen · Call in 2 hours</div></div>
+          <span class="chip chip-warm">Warm</span>
+        </div>
+        <div class="warmth-row">
+          <div><div class="warmth-name">Tanvi Gupta</div><div class="warmth-co">Clearfield · Stage mismatch</div></div>
+          <span class="chip chip-cold">Cold</span>
+        </div>
+      </div>
+
+      <div class="setup-indicator">
+        ⚙️ <span><strong>2 of 3 sources connected.</strong> Connect Calendly later to catch scheduling-link meetings — tap the nav indicator inside the app.</span>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary ember" onclick="showToast('Opening your Today view…')" style="font-size:15px; padding:16px 32px;">Open Today view →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span class="toast-check">✓</span>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+let currentStep = 1;
+const totalSteps = 7;
+let classifiedCount = 0;
+let emailConnected = false;
+
+const stepProgress = { 1:14, 2:28, 3:42, 4:57, 5:71, 6:85, 7:100 };
+const skipableSteps = [3, 4, 6];
+
+function goTo(step) {
+  document.getElementById('step-' + currentStep).classList.remove('active');
+  currentStep = step;
+  document.getElementById('step-' + currentStep).classList.add('active');
+  document.getElementById('progress-fill').style.width = stepProgress[step] + '%';
+  document.getElementById('step-counter').textContent = 'Step ' + step + ' of ' + totalSteps;
+
+  const skipBtn = document.getElementById('skip-btn');
+  skipBtn.style.visibility = skipableSteps.includes(step) ? 'visible' : 'hidden';
+
+  window.scrollTo(0, 0);
+
+  if (step === 5) startIngestion();
+}
+
+function skipStep() {
+  goTo(currentStep + 1);
+}
+
+function connectEmail(provider) {
+  const id = provider + '-card';
+  const card = document.getElementById(id);
+  card.classList.add('connecting');
+  card.querySelector('.btn-connect').innerHTML = '<span class="connecting-dots"><span class="dot-pulse"></span><span class="dot-pulse"></span><span class="dot-pulse"></span></span>';
+  setTimeout(() => {
+    card.classList.remove('connecting');
+    card.classList.add('connected');
+    card.querySelector('.connect-status').innerHTML = '<span class="connected-badge">✓ Connected</span>';
+    emailConnected = true;
+    document.getElementById('email-next-row').style.display = 'flex';
+    showToast('Email connected — 6 months of history queued');
+  }, 1800);
+}
+
+function connectCal(provider) {
+  const id = provider + '-card';
+  const card = document.getElementById(id);
+  card.classList.add('connecting');
+  card.querySelector('.btn-connect').innerHTML = '<span class="connecting-dots"><span class="dot-pulse"></span><span class="dot-pulse"></span><span class="dot-pulse"></span></span>';
+  setTimeout(() => {
+    card.classList.remove('connecting');
+    card.classList.add('connected');
+    card.querySelector('.connect-status').innerHTML = '<span class="connected-badge">✓ Connected</span>';
+    showToast('Calendar connected — triggers active');
+  }, 1600);
+}
+
+function connectTracker(provider) {
+  const id = provider + '-card';
+  const card = document.getElementById(id);
+  card.classList.add('connecting');
+  card.querySelector('.btn-connect').innerHTML = '<span class="connecting-dots"><span class="dot-pulse"></span><span class="dot-pulse"></span><span class="dot-pulse"></span></span>';
+  setTimeout(() => {
+    card.classList.remove('connecting');
+    card.classList.add('connected');
+    card.querySelector('.connect-status').innerHTML = '<span class="connected-badge">✓ Connected</span>';
+    showToast(provider.charAt(0).toUpperCase() + provider.slice(1) + ' connected — set as primary write-back target');
+  }, 2000);
+}
+
+function startIngestion() {
+  const rows = [
+    { id: 'ing-1', bar: 'bar-1', count: 'count-1', delay: 200, duration: 1400, final: '847 threads', barW: 100 },
+    { id: 'ing-2', bar: 'bar-2', count: 'count-2', delay: 800, duration: 1200, final: '38 meetings', barW: 100 },
+    { id: 'ing-3', bar: 'bar-3', count: 'count-3', delay: 1400, duration: 1000, final: '22 contacts', barW: 100 },
+    { id: 'ing-4', bar: 'bar-4', count: 'count-4', delay: 2000, duration: 1400, final: '34 scored', barW: 100 },
+    { id: 'ing-5', bar: 'bar-5', count: 'count-5', delay: 3000, duration: 1000, final: '18 prospects', barW: 100 },
+  ];
+
+  rows.forEach(r => {
+    setTimeout(() => {
+      document.getElementById(r.id).classList.add('visible');
+      setTimeout(() => {
+        document.getElementById(r.bar).style.width = r.barW + '%';
+        setTimeout(() => {
+          document.getElementById(r.count).textContent = r.final;
+        }, r.duration * 0.6);
+      }, 200);
+    }, r.delay);
+  });
+
+  setTimeout(() => {
+    document.getElementById('ingestion-done').style.display = 'block';
+  }, 5200);
+}
+
+function classify(id, type) {
+  const row = document.getElementById(id);
+  const btns = row.querySelectorAll('.classify-btn');
+  btns.forEach(b => b.classList.remove('prospect', 'not-prospect'));
+  if (type === 'prospect') {
+    btns[0].classList.add('prospect');
+  } else {
+    btns[1].classList.add('not-prospect');
+  }
+  classifiedCount++;
+  if (classifiedCount >= 3) {
+    document.getElementById('classify-continue').style.display = 'flex';
+  }
+}
+
+function confirmMapping() {
+  document.getElementById('mapping-confirmed').style.display = 'block';
+  showToast('Mapping saved — Notion is your primary write-back target');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

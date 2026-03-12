@@ -1,0 +1,654 @@
+<!--
+BCKEND-07-2026-03-11-backend-flow.html
+Relay — Backend Flow Deep Dive: Marcus Lee Auto-Draft Pipeline
+Date: 2026-03-11
+Contains: 8-step interactive walkthrough of the full backend pipeline
+          from meeting end (9:42am) to Arjun tapping Send (10:05am)
+Steps: Before call > Call ends > Webhook fires > Nylas pulls thread > 
+       LLM drafts > DB writes > Card appears > Arjun sends
+Design system: cream/ivory light theme, light code blocks, no dark backgrounds
+Rule: NO dark backgrounds ever. (Was rebuilt from dark theme after feedback.)
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay — How Marcus Lee's Draft Was Created</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F7F4EF;
+  --surface: #FFFFFF;
+  --surface2: #F2EFE9;
+  --surface3: #EAE6DF;
+  --border: #DDD8D0;
+  --border-mid: #C8C2B8;
+  --text: #1A1714;
+  --text-2: #4A4540;
+  --text-3: #8A8480;
+  --ember: #C94A10;
+  --ember-bg: #FDF1EC;
+  --ember-border: #F0C4AE;
+  --green: #1E7A48;
+  --green-bg: #EDF7F2;
+  --green-border: #A8D8BC;
+  --blue: #1A5EA8;
+  --blue-bg: #EEF4FC;
+  --blue-border: #AACBEE;
+  --purple: #6A30B8;
+  --purple-bg: #F4EFFC;
+  --purple-border: #C8AAEC;
+  --amber: #9A6A00;
+  --amber-bg: #FDF6E3;
+  --amber-border: #E8D090;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
+.progress-strip { position:fixed; top:0; left:0; right:0; height:3px; background:var(--border); z-index:100; }
+.progress-fill { height:100%; background:var(--ember); transition:width 0.4s ease; }
+.page-header { padding:52px 60px 0; max-width:1200px; margin:0 auto; }
+.page-eyebrow { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--ember); margin-bottom:14px; }
+.page-title { font-family:'Instrument Serif',serif; font-size:44px; font-weight:400; line-height:1.1; letter-spacing:-0.5px; color:var(--text); margin-bottom:12px; }
+.page-title em { font-style:italic; color:var(--ember); }
+.page-sub { font-size:15px; color:var(--text-2); max-width:580px; line-height:1.65; margin-bottom:40px; }
+.flow-selector { display:flex; gap:6px; padding:0 60px; max-width:1200px; margin:0 auto 40px; flex-wrap:wrap; }
+.flow-btn { padding:7px 14px; border-radius:6px; font-size:11px; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-3); font-family:'Geist Mono',monospace; transition:all 0.15s; }
+.flow-btn:hover { border-color:var(--border-mid); color:var(--text-2); }
+.flow-btn.active { border-color:var(--ember); color:var(--ember); background:var(--ember-bg); }
+.flow-layout { display:grid; grid-template-columns:340px 1fr; gap:0; max-width:1200px; margin:0 auto; padding:0 60px 80px; align-items:start; }
+.step-list { position:sticky; top:24px; padding-right:32px; }
+.step-item { display:flex; gap:14px; padding:14px 0; cursor:pointer; position:relative; }
+.step-item::after { content:''; position:absolute; left:15px; top:46px; bottom:-14px; width:1px; background:var(--border); }
+.step-item:last-child::after { display:none; }
+.step-num { width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); background:var(--surface); flex-shrink:0; position:relative; z-index:1; transition:all 0.25s; }
+.step-item.active .step-num { border-color:var(--ember); color:var(--ember); background:var(--ember-bg); }
+.step-item.done .step-num { border-color:var(--green); color:var(--green); background:var(--green-bg); }
+.step-text { flex:1; padding-top:5px; }
+.step-label { font-size:10.5px; font-family:'Geist Mono',monospace; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-3); margin-bottom:2px; }
+.step-title { font-size:13.5px; font-weight:500; color:var(--text-2); line-height:1.35; }
+.step-item.active .step-title { color:var(--text); }
+.step-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:5px; }
+.sys-tag { display:inline-flex; align-items:center; font-family:'Geist Mono',monospace; font-size:10px; padding:2px 6px; border-radius:4px; border:1px solid; }
+.tag-cronofy { background:var(--blue-bg); color:var(--blue); border-color:var(--blue-border); }
+.tag-nylas { background:var(--purple-bg); color:var(--purple); border-color:var(--purple-border); }
+.tag-engine { background:var(--amber-bg); color:var(--amber); border-color:var(--amber-border); }
+.tag-llm { background:var(--ember-bg); color:var(--ember); border-color:var(--ember-border); }
+.tag-db { background:var(--green-bg); color:var(--green); border-color:var(--green-border); }
+.tag-ui { background:#F0F0FC; color:#4040A0; border-color:#BBBBED; }
+.detail-panel { border-left:1px solid var(--border); padding-left:48px; }
+.panel { display:none; animation:fadeUp 0.28s ease both; }
+.panel.active { display:block; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.panel-title { font-family:'Instrument Serif',serif; font-size:32px; font-weight:400; color:var(--text); line-height:1.15; margin-bottom:10px; }
+.panel-title em { font-style:italic; color:var(--ember); }
+.panel-sub { font-size:14.5px; color:var(--text-2); line-height:1.65; margin-bottom:28px; max-width:560px; }
+.section-head { font-family:'Geist Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-3); margin:28px 0 12px; display:flex; align-items:center; gap:10px; }
+.section-head::after { content:''; flex:1; height:1px; background:var(--border); }
+.timing-strip { display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:24px; }
+.timing-block { flex:1; padding:11px 10px; background:var(--surface); text-align:center; border-right:1px solid var(--border); }
+.timing-block:last-child { border-right:none; }
+.timing-block.active { background:var(--ember-bg); }
+.timing-time { display:block; font-family:'Geist Mono',monospace; font-size:12px; font-weight:500; color:var(--text); }
+.timing-label { font-size:10px; color:var(--text-3); margin-top:2px; line-height:1.3; }
+.timing-block.active .timing-time { color:var(--ember); }
+.timing-block.active .timing-label { color:var(--ember); opacity:0.75; }
+.code-block { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:14px 0; }
+.code-header { padding:9px 14px; border-bottom:1px solid var(--border); background:var(--surface2); }
+.code-body { padding:16px; font-family:'Geist Mono',monospace; font-size:12px; line-height:1.85; color:var(--text-2); overflow-x:auto; }
+.ck { color:#1A5EA8; }
+.cv { color:#1E7A48; }
+.cs { color:#9A6A00; }
+.cn { color:#C94A10; }
+.cc { color:var(--text-3); }
+.ch { background:#FDF1EC; border-left:2px solid var(--ember); padding-left:8px; margin-left:-8px; display:block; }
+.data-table { width:100%; border-collapse:collapse; font-size:12.5px; margin:14px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.data-table th { text-align:left; padding:9px 13px; background:var(--surface2); color:var(--text-3); font-family:'Geist Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.7px; font-weight:400; border-bottom:1px solid var(--border); }
+.data-table td { padding:10px 13px; border-bottom:1px solid var(--border); color:var(--text-2); font-family:'Geist Mono',monospace; font-size:12px; vertical-align:top; background:var(--surface); }
+.data-table tr:last-child td { border-bottom:none; }
+.data-table tr.hl td { background:var(--ember-bg); }
+.data-table tr.hl td:first-child { border-left:2px solid var(--ember); }
+.tk { color:var(--blue); }
+.tv { color:var(--green); }
+.tsrc { color:var(--text-3); font-size:11px; }
+.tnew { color:var(--ember); font-weight:500; }
+.callout { border-radius:8px; padding:13px 16px; margin:14px 0; font-size:13px; color:var(--text-2); line-height:1.65; border:1px solid; }
+.callout strong { color:var(--text); }
+.callout.default { background:var(--ember-bg); border-color:var(--ember-border); border-left:3px solid var(--ember); }
+.callout.green { background:var(--green-bg); border-color:var(--green-border); border-left:3px solid var(--green); }
+.callout.blue { background:var(--blue-bg); border-color:var(--blue-border); border-left:3px solid var(--blue); }
+.callout.amber { background:var(--amber-bg); border-color:var(--amber-border); border-left:3px solid var(--amber); }
+.rule-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; margin:12px 0; }
+.rule-condition { font-family:'Geist Mono',monospace; font-size:12px; color:var(--amber); line-height:1.7; margin-bottom:10px; }
+.rule-then { font-size:13px; color:var(--text-2); line-height:1.6; border-top:1px solid var(--border); padding-top:10px; }
+.rule-then strong { color:var(--text); }
+.flow-diagram { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; margin:14px 0; }
+.flow-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+.flow-node { padding:7px 13px; border-radius:6px; font-size:11.5px; font-family:'Geist Mono',monospace; border:1px solid; white-space:nowrap; }
+.fn-trigger { background:var(--blue-bg); border-color:var(--blue-border); color:var(--blue); }
+.fn-read { background:var(--purple-bg); border-color:var(--purple-border); color:var(--purple); }
+.fn-compute { background:var(--amber-bg); border-color:var(--amber-border); color:var(--amber); }
+.fn-llm { background:var(--ember-bg); border-color:var(--ember-border); color:var(--ember); }
+.fn-write { background:var(--green-bg); border-color:var(--green-border); color:var(--green); }
+.fn-ui { background:#F0F0FC; border-color:#BBBBED; color:#4040A0; }
+.flow-arrow { color:var(--text-3); font-size:18px; }
+.prompt-block { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:14px 0; }
+.prompt-section { padding:13px 16px; border-bottom:1px solid var(--border); }
+.prompt-section:last-child { border-bottom:none; }
+.prompt-role { font-family:'Geist Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-bottom:7px; font-weight:500; }
+.role-system { color:var(--amber); }
+.role-context { color:var(--blue); }
+.role-instruction { color:var(--ember); }
+.role-output { color:var(--green); }
+.prompt-text { font-size:12.5px; color:var(--text-2); line-height:1.7; }
+.prompt-section:last-child .prompt-text { color:var(--green); background:var(--green-bg); padding:10px 12px; border-radius:6px; border:1px solid var(--green-border); }
+.email-preview { background:#FEFCF9; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:14px 0; }
+.email-header { background:var(--surface2); padding:12px 16px; border-bottom:1px solid var(--border); }
+.email-field { font-size:12px; font-family:'Geist Mono',monospace; color:var(--text-3); margin-bottom:3px; }
+.email-field span { color:var(--text-2); }
+.email-body { padding:18px 16px; font-size:13.5px; color:var(--text); line-height:1.75; }
+.hbadge { display:inline-block; padding:1px 7px; border-radius:4px; font-family:'Geist Mono',monospace; font-size:10.5px; font-weight:500; vertical-align:middle; border:1px solid; }
+.hb-blue { background:var(--blue-bg); color:var(--blue); border-color:var(--blue-border); }
+.hb-green { background:var(--green-bg); color:var(--green); border-color:var(--green-border); }
+.hb-ember { background:var(--ember-bg); color:var(--ember); border-color:var(--ember-border); }
+.hb-amber { background:var(--amber-bg); color:var(--amber); border-color:var(--amber-border); }
+.nav-btns { display:flex; gap:10px; margin-top:36px; padding-top:24px; border-top:1px solid var(--border); }
+.nav-btn { padding:10px 20px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.15s; }
+.nav-prev { background:var(--surface); color:var(--text-2); border:1px solid var(--border); }
+.nav-prev:hover { border-color:var(--border-mid); color:var(--text); }
+.nav-next { background:var(--ember); color:white; border:none; }
+.nav-next:hover { background:#A83A08; }
+.nav-next.alt { background:var(--green); }
+.nav-next.alt:hover { background:#165E38; }
+.nav-btn:disabled { opacity:0.3; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<div class="progress-strip"><div class="progress-fill" id="progress-fill" style="width:12.5%"></div></div>
+
+<div class="page-header">
+  <div class="page-eyebrow">Backend flow · Deep dive · Marcus Lee</div>
+  <h1 class="page-title">How a draft appeared in <em>8 minutes</em><br>— without Arjun typing a word.</h1>
+  <p class="page-sub">Arjun's call with Marcus ended at 9:42am. He opened Relay at 10:04am and found a complete follow-up email ready to send. Here is every single thing that happened in between — system by system, step by step.</p>
+</div>
+
+<div class="flow-selector">
+  <button class="flow-btn active" onclick="gotoStep(1)">01 · Before the call</button>
+  <button class="flow-btn" onclick="gotoStep(2)">02 · Call ends</button>
+  <button class="flow-btn" onclick="gotoStep(3)">03 · Webhook fires</button>
+  <button class="flow-btn" onclick="gotoStep(4)">04 · Email thread pulled</button>
+  <button class="flow-btn" onclick="gotoStep(5)">05 · LLM writes draft</button>
+  <button class="flow-btn" onclick="gotoStep(6)">06 · DB writes</button>
+  <button class="flow-btn" onclick="gotoStep(7)">07 · Card appears</button>
+  <button class="flow-btn" onclick="gotoStep(8)">08 · Arjun sends</button>
+</div>
+
+<div class="flow-layout">
+  <div class="step-list">
+
+    <div class="step-item active" onclick="gotoStep(1)">
+      <div class="step-num" id="sn-1">01</div>
+      <div class="step-text">
+        <div class="step-label">Context · Before 9:42am</div>
+        <div class="step-title">What Relay already knows before the call</div>
+        <div class="step-tags"><span class="sys-tag tag-db">Database</span><span class="sys-tag tag-nylas">Nylas</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(2)">
+      <div class="step-num" id="sn-2">02</div>
+      <div class="step-text">
+        <div class="step-label">Event · 9:42am · t=0s</div>
+        <div class="step-title">Call ends — Google Calendar event closes</div>
+        <div class="step-tags"><span class="sys-tag tag-cronofy">Cronofy</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(3)">
+      <div class="step-num" id="sn-3">03</div>
+      <div class="step-text">
+        <div class="step-label">Trigger · t=3s</div>
+        <div class="step-title">Cronofy fires webhook — 5 jobs queued</div>
+        <div class="step-tags"><span class="sys-tag tag-cronofy">Cronofy</span><span class="sys-tag tag-engine">Signal Engine</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(4)">
+      <div class="step-num" id="sn-4">04</div>
+      <div class="step-text">
+        <div class="step-label">Data · t=8s</div>
+        <div class="step-title">Nylas pulls full pre-call email thread</div>
+        <div class="step-tags"><span class="sys-tag tag-nylas">Nylas</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(5)">
+      <div class="step-num" id="sn-5">05</div>
+      <div class="step-text">
+        <div class="step-label">LLM · t=25s</div>
+        <div class="step-title">LLM generates draft follow-up email</div>
+        <div class="step-tags"><span class="sys-tag tag-llm">LLM</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(6)">
+      <div class="step-num" id="sn-6">06</div>
+      <div class="step-text">
+        <div class="step-label">Writes · t=30s</div>
+        <div class="step-title">5 objects written to the database</div>
+        <div class="step-tags"><span class="sys-tag tag-db">Database</span><span class="sys-tag tag-engine">Signal Engine</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(7)">
+      <div class="step-num" id="sn-7">07</div>
+      <div class="step-text">
+        <div class="step-label">UI · t=35s</div>
+        <div class="step-title">Today view updates — card appears</div>
+        <div class="step-tags"><span class="sys-tag tag-ui">Frontend</span></div>
+      </div>
+    </div>
+
+    <div class="step-item" onclick="gotoStep(8)">
+      <div class="step-num" id="sn-8">08</div>
+      <div class="step-text">
+        <div class="step-label">Action · 10:04am</div>
+        <div class="step-title">Arjun reviews draft, taps Send</div>
+        <div class="step-tags"><span class="sys-tag tag-nylas">Nylas</span><span class="sys-tag tag-db">Database</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="detail-panel">
+
+    <!-- PANEL 1 -->
+    <div class="panel active" id="panel-1">
+      <div class="panel-title">Before the call —<br><em>what Relay already knows.</em></div>
+      <p class="panel-sub">By the time Arjun joins his 9:00am call with Marcus, Relay has 6 weeks of relationship history already indexed. No manual entry. All built from email and calendar ingestion during onboarding.</p>
+      <div class="timing-strip">
+        <div class="timing-block active"><span class="timing-time">9:00am</span><span class="timing-label">Relay running. Data live.</span></div>
+        <div class="timing-block"><span class="timing-time">9:42am</span><span class="timing-label">Call ends</span></div>
+        <div class="timing-block"><span class="timing-time">9:43am</span><span class="timing-label">Draft created</span></div>
+        <div class="timing-block"><span class="timing-time">10:04am</span><span class="timing-label">Arjun sends</span></div>
+      </div>
+      <div class="section-head">Contact record — before the call</div>
+      <table class="data-table">
+        <tr><th>Field</th><th>Value</th><th>Source</th></tr>
+        <tr><td class="tk">name</td><td class="tv">"Marcus Lee"</td><td class="tsrc">Nylas email header</td></tr>
+        <tr><td class="tk">company</td><td class="tv">"Orion Systems"</td><td class="tsrc">LLM-extracted from thread</td></tr>
+        <tr><td class="tk">role</td><td class="tv">"CTO"</td><td class="tsrc">LLM-extracted from signature</td></tr>
+        <tr><td class="tk">last_interaction_date</td><td class="tv">2026-03-07</td><td class="tsrc">Nylas — last email received</td></tr>
+      </table>
+      <div class="section-head">Deal record — state before the call</div>
+      <table class="data-table">
+        <tr><th>Field</th><th>Value</th><th>Source</th></tr>
+        <tr><td class="tk">stage</td><td class="tv">CLOSING</td><td class="tsrc">LLM inferred from thread language</td></tr>
+        <tr><td class="tk">warmth_score</td><td class="tv">HOT</td><td class="tsrc">Signal engine — computed</td></tr>
+        <tr><td class="tk">silence_gap_days</td><td class="tv">4</td><td class="tsrc">Computed: today minus last email</td></tr>
+        <tr><td class="tk">next_meeting_date</td><td class="tv">2026-03-11 09:00</td><td class="tsrc">Cronofy — meeting booked</td></tr>
+        <tr><td class="tk">value</td><td class="tv">Rs. 18,00,000</td><td class="tsrc">Notion import</td></tr>
+      </table>
+      <div class="section-head">Activity timeline — 6 emails already indexed</div>
+      <table class="data-table">
+        <tr><th>Date</th><th>Type</th><th>What it tells Relay</th></tr>
+        <tr><td>3 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">Marcus asked CFO to join — strong buying signal</td></tr>
+        <tr><td>4 Mar</td><td><span class="hbadge hb-ember">SENT</span></td><td class="tsrc">Arjun confirmed — booked Thursday 9am</td></tr>
+        <tr><td>5 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">Marcus sent 3 questions: ROI / pricing / pilot scope</td></tr>
+        <tr><td>7 Mar</td><td><span class="hbadge hb-ember">SENT</span></td><td class="tsrc">Arjun replied with ROI model attached (PDF)</td></tr>
+        <tr class="hl"><td>7 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">"Looks solid. Let's go through pilot scope on our call." LAST EMAIL</td></tr>
+        <tr class="hl"><td>11 Mar</td><td><span class="hbadge hb-amber">MEET</span></td><td class="tsrc">Today 9:00am — THIS call. Pre-call brief staged.</td></tr>
+      </table>
+      <div class="callout default"><strong>Why "Hot"?</strong> Stage is Closing (weight 5), silence gap is 4 days (within threshold), thread velocity accelerating (4 replies in 5 days), meeting booked today. All rule-based. No LLM needed for the warmth score.</div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" disabled>Previous</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(2)">Call ends — Step 2</button>
+      </div>
+    </div>
+
+    <!-- PANEL 2 -->
+    <div class="panel" id="panel-2">
+      <div class="panel-title">9:42am —<br><em>the call ends.</em></div>
+      <p class="panel-sub">Arjun and Marcus finish their 38-minute call. Arjun puts his phone down. He hasn't typed a word. Relay has already started working.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:00am</span><span class="timing-label">Call starts</span></div>
+        <div class="timing-block active"><span class="timing-time">9:42am</span><span class="timing-label">Call ends — YOU ARE HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:43am</span><span class="timing-label">Draft created</span></div>
+        <div class="timing-block"><span class="timing-time">10:04am</span><span class="timing-label">Arjun sends</span></div>
+      </div>
+      <div class="section-head">What Google Calendar sees</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-cronofy">Cronofy — Google Calendar event object</span></div>
+        <div class="code-body">{
+  <span class="ck">"summary"</span>:          <span class="cs">"Kodo / Orion Systems — Pilot Discussion"</span>,
+  <span class="ck">"organizer"</span>:        <span class="cs">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a9c8dbc3dcc7e9c2c6cdc687c0c6">[email&#160;protected]</a>"</span>,
+  <span class="ck">"attendees"</span>:        [<span class="cs">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="19786b736c775972767d76377076">[email&#160;protected]</a>"</span>, <span class="ch"><span class="cs">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7a171b08190f093a150813151409030954191517">[email&#160;protected]</a>"</span>  <span class="cc">external = prospect</span></span>],
+  <span class="ck">"start"</span>:           <span class="cs">"2026-03-11T09:00:00+05:30"</span>,
+  <span class="ck">"end"</span>:             <span class="ch"><span class="cs">"2026-03-11T09:38:00+05:30"</span>  <span class="cc">ran 8 mins over</span></span>
+  <span class="ck">"conferencing"</span>:    <span class="cs">"Google Meet"</span>,
+  <span class="ck">"duration_minutes"</span>: <span class="cn">38</span>
+}</div>
+      </div>
+      <div class="section-head">The exact rule that identifies this as a sales call</div>
+      <div class="rule-box">
+        <div class="rule-condition">IF event.status == "confirmed"<br>AND event.end_time &lt;= NOW()<br>AND external_attendee EXISTS in contacts table<br>AND external_attendee.deal_id IS NOT NULL</div>
+        <div class="rule-then">Then: <strong>This is a prospect call that just ended.</strong> Fire the post-call pipeline.</div>
+      </div>
+      <div class="callout amber"><strong>What Relay does NOT have:</strong> the call content. It only knows the meeting happened, who attended, how long it ran. The draft and summary are inferred from what came before and after.</div>
+      <div class="callout blue"><strong>Duration signal:</strong> 38 minutes on a 30-minute invite = ran 8 minutes over. Positive engagement signal. Relay records this without any input from Arjun.</div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(1)">Step 1</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(3)">Webhook fires — Step 3</button>
+      </div>
+    </div>
+
+    <!-- PANEL 3 -->
+    <div class="panel" id="panel-3">
+      <div class="panel-title">t = 3 seconds —<br><em>Cronofy fires the webhook.</em></div>
+      <p class="panel-sub">Cronofy holds a persistent subscription to Arjun's Google Calendar. The moment Google marks the event ended, Cronofy sends an HTTP POST to Relay's backend. This is the starting gun for everything.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:42:00</span><span class="timing-label">Call ends</span></div>
+        <div class="timing-block active"><span class="timing-time">9:42:03</span><span class="timing-label">Webhook fires — HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:42:08</span><span class="timing-label">Nylas query starts</span></div>
+        <div class="timing-block"><span class="timing-time">9:43:10</span><span class="timing-label">Draft ready</span></div>
+      </div>
+      <div class="section-head">The webhook payload Relay receives</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-cronofy">POST — relay.app/webhooks/cronofy</span></div>
+        <div class="code-body">{
+  <span class="ck">"notification"</span>: {
+    <span class="ck">"type"</span>:          <span class="cs">"change"</span>,
+    <span class="ck">"changed_since"</span>: <span class="cs">"2026-03-11T04:12:03Z"</span>,
+    <span class="ck">"sub"</span>:           <span class="cs">"acc_arjun_kodo"</span>
+  }
+}
+<span class="cc">// Relay responds: fetch full event from Cronofy,
+// then match attendees against contacts table.</span></div>
+      </div>
+      <div class="callout default"><strong>The webhook is intentionally minimal.</strong> Cronofy just says "something changed." Relay fetches the full event itself. Ping, then pull.</div>
+      <div class="section-head">5 parallel jobs queued from this single trigger</div>
+      <div class="flow-diagram">
+        <div style="font-size:11px;color:var(--text-3);font-family:'Geist Mono',monospace;margin-bottom:14px;">MEETING_END detected — dispatcher spawns 5 jobs simultaneously</div>
+        <div class="flow-row">
+          <div class="flow-node fn-trigger">MEETING_END</div>
+          <div class="flow-arrow">→</div>
+          <div style="display:flex;flex-direction:column;gap:7px;flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><div class="flow-node fn-llm">JOB 1 · Auto-draft email</div><span style="font-size:11px;color:var(--ember);font-family:'Geist Mono',monospace;font-weight:600;">THIS FLOW</span></div>
+            <div class="flow-node fn-compute" style="width:fit-content;">JOB 2 · Context reconstruction</div>
+            <div class="flow-node fn-write" style="width:fit-content;">JOB 3 · Activity record created</div>
+            <div class="flow-node fn-write" style="width:fit-content;">JOB 4 · Notion write-back queued</div>
+            <div class="flow-node fn-compute" style="width:fit-content;">JOB 5 · Warmth score recalculated</div>
+          </div>
+        </div>
+      </div>
+      <div class="section-head">How Relay matches this event to Marcus's deal</div>
+      <div class="rule-box">
+        <div class="rule-condition">SELECT deal_id FROM contacts<br>WHERE email = "<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d8b5b9aabbadab98b7aab1b7b6aba1abf6bbb7b5">[email&#160;protected]</a>"<br>AND owner_id = "arjun_kodo"</div>
+        <div class="rule-then">Returns <strong>deal_7c1b4</strong> (Marcus Lee, Orion Systems). All 5 jobs receive this deal_id as context.</div>
+      </div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(2)">Step 2</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(4)">Nylas pulls email — Step 4</button>
+      </div>
+    </div>
+
+    <!-- PANEL 4 -->
+    <div class="panel" id="panel-4">
+      <div class="panel-title">t = 8 seconds —<br><em>Nylas pulls the thread.</em></div>
+      <p class="panel-sub">Job 1 (auto-draft) needs raw material. No call recording exists. So it fetches everything that does: the full pre-call email thread between Arjun and Marcus. This becomes the draft's foundation.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:42:03</span><span class="timing-label">Webhook received</span></div>
+        <div class="timing-block active"><span class="timing-time">9:42:08</span><span class="timing-label">Nylas query — HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:42:15</span><span class="timing-label">Thread returned</span></div>
+        <div class="timing-block"><span class="timing-time">9:42:18</span><span class="timing-label">LLM called</span></div>
+      </div>
+      <div class="section-head">The Nylas API query Relay sends</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-nylas">GET — api.nylas.com/v3/grants/arjun_kodo/messages</span></div>
+        <div class="code-body"><span class="cc">// Query params:</span>
+<span class="ck">any_email</span>:  <span class="cs">"<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b4d9d5c6d7c1c7f4dbc6dddbdac7cdc79ad7dbd9">[email&#160;protected]</a>"</span>
+<span class="ck">limit</span>:      <span class="cn">20</span>
+<span class="ck">before</span>:     <span class="ch"><span class="cs">"2026-03-11T09:00:00Z"</span>  <span class="cc">only pre-call emails</span></span>
+<span class="ck">fields</span>:     <span class="cs">"subject,from,to,date,body,snippet,attachments"</span></div>
+      </div>
+      <div class="section-head">What Nylas returns — the 5 emails that become the raw material</div>
+      <table class="data-table">
+        <tr><th>Date</th><th>Dir</th><th>Content / signal</th></tr>
+        <tr><td>3 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">"Really impressive — can we loop in our CFO?"</td></tr>
+        <tr><td>4 Mar</td><td><span class="hbadge hb-ember">SENT</span></td><td class="tsrc">"Happy to — how's Thursday 9am?"</td></tr>
+        <tr><td>5 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">"Thursday works. 3 Qs: ROI / pricing / pilot scope"</td></tr>
+        <tr><td>7 Mar</td><td><span class="hbadge hb-ember">SENT</span></td><td class="tsrc">"Answers inline + ROI model attached" [PDF]</td></tr>
+        <tr class="hl"><td>7 Mar</td><td><span class="hbadge hb-blue">RECV</span></td><td class="tsrc">"Looks solid. Let's go through pilot scope on our call Thursday." LAST EMAIL</td></tr>
+      </table>
+      <div class="callout green"><strong>This is the LLM's only raw material.</strong> Five emails. No recording. No notes. The thread tells Relay: Marcus is engaged, CFO is involved, ROI was shared, and today's call goal was "pilot scope." The LLM uses this to write a follow-up that sounds like Arjun wrote it.</div>
+      <div class="callout default"><strong>Why "before 9:00am"?</strong> The draft fires the moment the call ends — before Arjun has sent anything. The query excludes post-call emails to keep the draft clean. Post-call emails feed the next reconstruction cycle.</div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(3)">Step 3</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(5)">LLM drafts — Step 5</button>
+      </div>
+    </div>
+
+    <!-- PANEL 5 -->
+    <div class="panel" id="panel-5">
+      <div class="panel-title">t = 25 seconds —<br><em>the LLM writes the email.</em></div>
+      <p class="panel-sub">The thread is passed to the LLM with a structured prompt. No call recording. The LLM produces a draft based on what the thread implies the call covered — and what a thoughtful post-call follow-up would look like.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:42:15</span><span class="timing-label">Thread received</span></div>
+        <div class="timing-block active"><span class="timing-time">9:42:18</span><span class="timing-label">LLM called — HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:43:05</span><span class="timing-label">Draft returned (~45s)</span></div>
+        <div class="timing-block"><span class="timing-time">9:43:10</span><span class="timing-label">Written to DB</span></div>
+      </div>
+      <div class="section-head">The prompt Relay sends to the LLM</div>
+      <div class="prompt-block">
+        <div class="prompt-section">
+          <div class="prompt-role role-system">SYSTEM PROMPT</div>
+          <div class="prompt-text">You write follow-up emails for a founder after sales calls. Sound like the founder — brief, direct, no filler. First person. Never mention AI. Match the tone from the thread provided.</div>
+        </div>
+        <div class="prompt-section">
+          <div class="prompt-role role-context">CONTEXT — EMAIL THREAD (compressed)</div>
+          <div class="prompt-text">Founder: Arjun Dev (<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7415061e011a341f1b101b5a1d1b">[email&#160;protected]</a>)<br>Prospect: Marcus Lee, CTO at Orion Systems<br>Deal stage: Closing. Value: Rs. 18L<br><br>Thread: Marcus asked CFO to join after demo. Asked 3 questions on ROI, pricing, pilot scope. Arjun answered all three and attached ROI model. Marcus replied: "Looks solid. Let's go through pilot scope on our call Thursday — want eng team aligned before we proceed." That call just ended. 38 min, ran 8 min over.</div>
+        </div>
+        <div class="prompt-section">
+          <div class="prompt-role role-instruction">INSTRUCTION</div>
+          <div class="prompt-text">Write a post-call follow-up from Arjun to Marcus. The call covered pilot scope. Reference what was likely discussed. One clear next step. Under 120 words. Do not fabricate specific numbers not in the thread.</div>
+        </div>
+        <div class="prompt-section">
+          <div class="prompt-role role-output">LLM OUTPUT</div>
+          <div class="prompt-text">Hi Marcus,
+
+Thanks for the time this morning. Really useful conversation.
+
+As discussed, I'll put together the pilot scope doc for your engineering team by Thursday. Happy to jump on a quick call Friday if you'd like to walk through it together before the board meeting on the 18th.
+
+Let me know if anything changes on your end.
+
+Arjun</div>
+        </div>
+      </div>
+      <div class="callout default"><strong>How did it know about the board meeting on the 18th?</strong> It didn't — not from the call. That was inferred: a CFO is involved, Closing-stage deals typically have board approval timelines, and the call was Thursday suggesting a next-week deadline. This is why the card is labelled [Inferred]. If it's wrong, Arjun edits it. If right, he taps Send.</div>
+      <div class="callout amber"><strong>The accuracy shortcut:</strong> When Arjun sends this and Marcus reads it — if any fact is off, Marcus corrects it in his reply. That reply goes into Gmail, Nylas reads it, and the correction becomes deal context. The prospect is the quality check. Zero extra work from Arjun.</div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(4)">Step 4</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(6)">Objects written — Step 6</button>
+      </div>
+    </div>
+
+    <!-- PANEL 6 -->
+    <div class="panel" id="panel-6">
+      <div class="panel-title">t = 30 seconds —<br><em>five objects written to the database.</em></div>
+      <p class="panel-sub">The LLM output triggers a cascade of structured writes. Every part of the system that needs to know about this call gets updated. This is the moment the call officially enters Relay's memory.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:43:05</span><span class="timing-label">Draft returned</span></div>
+        <div class="timing-block active"><span class="timing-time">9:43:10</span><span class="timing-label">DB writes — HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:43:15</span><span class="timing-label">Today view updates</span></div>
+        <div class="timing-block"><span class="timing-time">10:04am</span><span class="timing-label">Arjun sends</span></div>
+      </div>
+      <div class="section-head">Write 1 — Activity (the meeting record)</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">INSERT — activities</span></div>
+        <div class="code-body">{
+  <span class="ck">"type"</span>:                      <span class="cs">"meeting"</span>,
+  <span class="ck">"duration_minutes"</span>:          <span class="cn">38</span>,
+  <span class="ck">"reconstruction_confidence"</span>:  <span class="ch"><span class="cn">0.72</span>  <span class="cc">flagged [Inferred — not recorded]</span></span>
+  <span class="ck">"ai_summary"</span>: <span class="cs">"Pilot scope discussed. Scope doc due Thu. Board mtg 18 Mar."</span>
+}</div>
+      </div>
+      <div class="section-head">Write 2 — Signal (what triggered this)</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">INSERT — signals</span></div>
+        <div class="code-body">{
+  <span class="ck">"signal_type"</span>:  <span class="cs">"post_call_draft_ready"</span>,
+  <span class="ck">"resolved_at"</span>:  <span class="cc">null  — stays open until Arjun sends or discards</span>
+}</div>
+      </div>
+      <div class="section-head">Write 3 — Action (what surfaces in Today view)</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">INSERT — actions</span></div>
+        <div class="code-body">{
+  <span class="ck">"type"</span>:           <span class="cs">"draft_ready"</span>,
+  <span class="ck">"urgency_score"</span>:  <span class="ch"><span class="cn">94.2</span>  <span class="cc">high: Hot deal + draft degrades if not sent today</span></span>
+  <span class="ck">"title"</span>:          <span class="cs">"Call ended 22 mins ago. Draft follow-up ready."</span>,
+  <span class="ck">"status"</span>:         <span class="cs">"pending"</span>
+}</div>
+      </div>
+      <div class="section-head">Write 4 — Deal updated</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">UPDATE — deals WHERE deal_id = deal_7c1b4</span></div>
+        <div class="code-body">SET
+  <span class="ck">last_activity_date</span>  = <span class="cs">"2026-03-11"</span>,
+  <span class="ck">silence_gap_days</span>    = <span class="ch"><span class="cn">0</span>  <span class="cc">reset: meeting just happened</span></span>
+  <span class="ck">next_meeting_date</span>   = <span class="cc">null  — meeting is now past</span></div>
+      </div>
+      <div class="section-head">Write 5 — Notion write-back (awaiting approval)</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">INSERT — pending_writebacks</span></div>
+        <div class="code-body">{
+  <span class="ck">"target"</span>:     <span class="cs">"Notion — Sales Pipeline — Marcus Lee row"</span>,
+  <span class="ck">"operation"</span>:  <span class="cs">"APPEND"</span>,  <span class="cc">never overwrite</span>
+  <span class="ck">"value"</span>:      <span class="cs">"[Relay 11 Mar] Pilot scope call 38 min. Scope doc due Thu. [Inferred]"</span>,
+  <span class="ck">"status"</span>:     <span class="ch"><span class="cs">"AWAITING_APPROVAL"</span>  <span class="cc">shows in Pending queue — badge +1</span></span>
+}</div>
+      </div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(5)">Step 5</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(7)">Card appears — Step 7</button>
+      </div>
+    </div>
+
+    <!-- PANEL 7 -->
+    <div class="panel" id="panel-7">
+      <div class="panel-title">t = 35 seconds —<br><em>the card appears in Today.</em></div>
+      <p class="panel-sub">The frontend polls for Action updates every 30 seconds. When it fetches the new draft_ready action, it inserts the Marcus card into Today — re-sorted by urgency score. All while Arjun is on another tab.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:43:10</span><span class="timing-label">DB writes done</span></div>
+        <div class="timing-block active"><span class="timing-time">9:43:15</span><span class="timing-label">Today updates — HERE</span></div>
+        <div class="timing-block"><span class="timing-time">9:43:20</span><span class="timing-label">Pending badge: +1</span></div>
+        <div class="timing-block"><span class="timing-time">10:04am</span><span class="timing-label">Arjun opens app</span></div>
+      </div>
+      <div class="section-head">The query Today view runs every 30 seconds</div>
+      <div class="code-block">
+        <div class="code-header"><span class="sys-tag tag-db">SELECT — actions joined with deals and contacts</span></div>
+        <div class="code-body">SELECT
+  a.action_id, a.type, a.title, <span class="ch">a.urgency_score,</span>
+  d.warmth_score, d.silence_gap_days, d.stage,
+  c.name, c.company, c.role
+FROM actions a
+JOIN deals    d ON a.deal_id    = d.deal_id
+JOIN contacts c ON a.contact_id = c.contact_id
+WHERE
+  a.owner_id = <span class="cs">'arjun_kodo'</span>
+  AND a.status = <span class="cs">'pending'</span>
+  AND (a.snooze_until IS NULL OR a.snooze_until &lt; NOW())
+ORDER BY a.urgency_score DESC
+LIMIT 20</div>
+      </div>
+      <div class="section-head">Why Marcus is card #2 not #1 — urgency score breakdown</div>
+      <table class="data-table">
+        <tr><th>Input</th><th>Marcus Lee</th><th>Priya Mehta</th></tr>
+        <tr><td class="tk">silence_gap</td><td>0 days — <span class="tv">1.0x</span></td><td>12 days — <span class="tv">1.7x</span></td></tr>
+        <tr><td class="tk">stage_weight</td><td>Closing — <span class="tv">5</span></td><td>Proposal — <span class="tv">4</span></td></tr>
+        <tr><td class="tk">warmth_weight</td><td>Hot — <span class="tv">4</span></td><td>Cooling — <span class="tv">2</span></td></tr>
+        <tr><td class="tk">type_bonus</td><td>draft_ready — <span class="tv">+12</span></td><td>follow_up — <span class="tv">+0</span></td></tr>
+        <tr><td class="tk">value_bonus</td><td>Rs.18L — <span class="tv">+8</span></td><td>Rs.9.6L — <span class="tv">+4</span></td></tr>
+        <tr class="hl"><td class="tk">urgency_score</td><td class="tv">94.2</td><td class="tnew">96.8 — wins</td></tr>
+      </table>
+      <div class="callout default">Priya scores higher because her 12-day silence at Proposal Out stage is actively decaying — money at risk. Marcus's draft is time-sensitive but the deal is healthy. The algorithm correctly prioritises the dying deal over the thriving one.</div>
+      <div class="callout green"><strong>Pending badge:</strong> increments to "Pending (4)" — one new item. The Notion write-back for Marcus's call is awaiting approval. The draft itself appears directly in Today (not Pending) because it needs action, not approval.</div>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(6)">Step 6</button>
+        <button class="nav-btn nav-next" onclick="gotoStep(8)">Arjun sends — Step 8</button>
+      </div>
+    </div>
+
+    <!-- PANEL 8 -->
+    <div class="panel" id="panel-8">
+      <div class="panel-title">10:04am —<br><em>Arjun taps Send. The loop closes.</em></div>
+      <p class="panel-sub">22 minutes after the call ended. Arjun opens Relay, expands the Marcus card, skims the draft, makes no edits, taps Send. The email goes out — and that tap triggers the next cycle automatically.</p>
+      <div class="timing-strip">
+        <div class="timing-block"><span class="timing-time">9:42am</span><span class="timing-label">Call ended</span></div>
+        <div class="timing-block"><span class="timing-time">9:43am</span><span class="timing-label">Draft ready</span></div>
+        <div class="timing-block"><span class="timing-time">10:04am</span><span class="timing-label">Arjun opens app</span></div>
+        <div class="timing-block active"><span class="timing-time">10:05am</span><span class="timing-label">Send tapped — HERE</span></div>
+      </div>
+      <div class="section-head">The email that goes out</div>
+      <div class="email-preview">
+        <div class="email-header">
+          <div class="email-field">From: <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="88e9fae2fde6c8e3e7ece7a6e1e7">[email&#160;protected]</a></span></div>
+          <div class="email-field">To: <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="167b77647563655679647f7978656f653875797b">[email&#160;protected]</a></span></div>
+          <div class="email-field">Subject: <span>Re: Kodo demo — pilot scope</span></div>
+          <div class="email-field">Sent: <span>11 Mar 2026, 10:05am</span></div>
+        </div>
+        <div class="email-body">Hi Marcus,<br><br>Thanks for the time this morning. Really useful conversation.<br><br>As discussed, I'll put together the pilot scope doc for your engineering team by Thursday. Happy to jump on a quick call Friday if you'd like to walk through it together before the board meeting on the 18th.<br><br>Let me know if anything changes on your end.<br><br>Arjun</div>
+      </div>
+      <div class="section-head">What happens the moment Send is tapped</div>
+      <table class="data-table">
+        <tr><th>Object</th><th>What changes</th></tr>
+        <tr><td class="tk">Action</td><td>status — <span class="tv">completed</span>. Removed from Today view instantly.</td></tr>
+        <tr><td class="tk">Activity</td><td>New <span class="tv">email_sent</span> activity created. Linked to Nylas message_id.</td></tr>
+        <tr><td class="tk">Deal</td><td>last_activity_date — today. silence_gap_days — <span class="tv">0</span>. Warmth stays HOT.</td></tr>
+        <tr><td class="tk">Signal engine</td><td>Silence gap clock resets. Next check in +3 days (Closing threshold).</td></tr>
+      </table>
+      <div class="section-head">The self-reinforcing loop — what happens next without Arjun doing anything</div>
+      <div class="flow-diagram">
+        <div style="font-size:11px;color:var(--text-3);font-family:'Geist Mono',monospace;margin-bottom:14px;">After Send — cycle continues automatically</div>
+        <div class="flow-row">
+          <div class="flow-node fn-trigger">Arjun taps Send</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node fn-read">Nylas picks up sent email</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node fn-write">email_sent Activity logged</div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="flow-row">
+          <div class="flow-node fn-trigger">Marcus replies</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node fn-read">Nylas reads reply</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node fn-compute">Response latency computed</div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="flow-row">
+          <div class="flow-node fn-write">Deal context enriched</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node fn-ui">Next action surfaces in Today</div>
+        </div>
+      </div>
+      <div class="callout green"><strong>What Arjun did across this entire flow:</strong> tapped Send once. That's it. The call happened. 22 minutes later the follow-up was written, sent, and logged. Notion is queued for update. Silence gap clock reset. Next action surfaces automatically when Marcus replies — or in 3 days if he doesn't.</div>
+      <div class="section-head">Full timeline — every second accounted for</div>
+      <table class="data-table">
+        <tr><th>Time</th><th>Event</th><th>System</th></tr>
+        <tr><td>9:42:00</td><td>Call ends (38 min, ran over)</td><td class="tsrc">Arjun + Marcus</td></tr>
+        <tr><td>9:42:03</td><td>Cronofy webhook fires</td><td class="tsrc">Cronofy to Relay backend</td></tr>
+        <tr><td>9:42:05</td><td>5 pipeline jobs queued</td><td class="tsrc">Relay job dispatcher</td></tr>
+        <tr><td>9:42:08</td><td>Nylas pulls 5 pre-call emails</td><td class="tsrc">Nylas API</td></tr>
+        <tr><td>9:42:18</td><td>LLM called with thread and prompt</td><td class="tsrc">Relay to LLM</td></tr>
+        <tr><td>9:43:05</td><td>Draft email returned by LLM</td><td class="tsrc">LLM to Relay</td></tr>
+        <tr><td>9:43:10</td><td>5 DB objects written</td><td class="tsrc">Relay backend</td></tr>
+        <tr><td>9:43:15</td><td>Today view card appears</td><td class="tsrc">Frontend poll</td></tr>
+        <tr><td>10:04:00</td><td>Arjun opens Relay</td><td class="tsrc">Arjun</td></tr>
+        <tr class="hl"><td>10:05:12</td><td>Arjun taps Send — 8 seconds of effort total</td><td class="tsrc">Arjun</td></tr>
+        <tr class="hl"><td>10:05:13</td><td>Email sent. Action closed. Cycle resets.</td><td class="tsrc">Nylas + Relay</td></tr>
+      </table>
+      <div class="nav-btns">
+        <button class="nav-btn nav-prev" onclick="gotoStep(7)">Step 7</button>
+        <button class="nav-btn nav-next alt" onclick="gotoS

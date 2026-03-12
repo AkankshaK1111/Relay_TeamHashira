@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay — Addition 1: 2-Tap Post-Call Capture</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#16120E; --ink-2:#4A4238; --ink-3:#8C7E72; --ink-4:#B8AFA7;
+  --parch:#F7F3EE; --parch-2:#EDE7DF; --parch-3:#E2D9CE;
+  --border:#D8CEC3; --bord-str:#C0B3A4; --surface:#FFFFFF;
+  --ember:#C0460A; --ember-l:#F5E4DA;
+  --green:#2E6E48; --green-l:#DEF0E6;
+  --amber:#9A6A0A; --amber-l:#F5EACC;
+  --blue:#1E4E7A; --blue-l:#DDE9F5;
+  --r:10px; --r-sm:6px;
+  --trans:0.18s cubic-bezier(0.4,0,0.2,1);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+body{font-family:'DM Sans',sans-serif;background:var(--parch);color:var(--ink);min-height:100vh}
+button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none;outline:none}
+
+/* LAYOUT */
+.page { display:none; }
+.page.active { display:block; }
+.shell { max-width:1100px; margin:0 auto; padding:40px 28px 120px; }
+
+/* NAV */
+.top-bar {
+  position:fixed; top:0; left:0; right:0; height:52px;
+  background:var(--parch); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 28px; gap:20px; z-index:200;
+}
+.logo { font-family:'Fraunces',serif; font-size:18px; font-weight:400; color:var(--ink); }
+.logo em { color:var(--ember); font-style:italic; }
+.top-bar-title { font-size:13px; color:var(--ink-3); }
+.back-link { font-size:12.5px; color:var(--ember); text-decoration:underline; text-underline-offset:3px; cursor:pointer; margin-left:auto; }
+
+/* HERO BANNER */
+.addition-banner {
+  background:var(--ink); color:white; border-radius:var(--r);
+  padding:28px 32px; margin-bottom:32px; margin-top:64px;
+  display:flex; align-items:flex-start; gap:20px;
+}
+.ab-source { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,0.45); margin-bottom:8px; }
+.ab-title { font-family:'Fraunces',serif; font-size:28px; font-weight:400; line-height:1.15; letter-spacing:-0.4px; margin-bottom:8px; }
+.ab-title em { font-style:italic; color:#E88A60; }
+.ab-desc { font-size:13.5px; color:rgba(255,255,255,0.7); line-height:1.6; max-width:560px; }
+.ab-badge { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); border-radius:var(--r-sm); padding:8px 14px; font-size:12px; color:rgba(255,255,255,0.6); white-space:nowrap; flex-shrink:0; text-align:center; }
+.ab-badge strong { display:block; font-size:16px; color:white; margin-bottom:2px; }
+
+/* SECTION */
+.section-title { font-family:'Fraunces',serif; font-size:21px; font-weight:400; color:var(--ink); margin-bottom:6px; letter-spacing:-0.3px; }
+.section-sub { font-size:13.5px; color:var(--ink-3); line-height:1.6; margin-bottom:22px; }
+.demo-section { margin-bottom:48px; }
+
+/* WHAT RELAY ALREADY DOES vs WHAT THIS ADDS */
+.before-after {
+  display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:32px;
+}
+.ba-col { border-radius:var(--r); padding:18px 20px; }
+.ba-before { background:var(--parch-2); border:1.5px solid var(--border); }
+.ba-after { background:var(--green-l); border:1.5px solid #A8D8C0; }
+.ba-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:10px; }
+.ba-before .ba-label { color:var(--ink-3); }
+.ba-after .ba-label { color:var(--green); }
+.ba-title { font-size:14px; font-weight:600; color:var(--ink); margin-bottom:6px; }
+.ba-text { font-size:13px; color:var(--ink-2); line-height:1.6; }
+.ba-list { list-style:none; display:flex; flex-direction:column; gap:6px; }
+.ba-list li { font-size:13px; color:var(--ink-2); display:flex; gap:8px; }
+.ba-list li::before { content:'→'; color:var(--ink-4); flex-shrink:0; }
+.ba-after .ba-list li::before { content:'✓'; color:var(--green); }
+
+/* STAGE EXPLAINER */
+.stage-flow {
+  display:flex; align-items:center; gap:0; margin-bottom:28px;
+  background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r);
+  overflow:hidden;
+}
+.sf-step { flex:1; padding:16px 14px; text-align:center; position:relative; }
+.sf-step:not(:last-child)::after {
+  content:''; position:absolute; right:-1px; top:50%; transform:translateY(-50%);
+  width:0; height:0; border-top:14px solid transparent; border-bottom:14px solid transparent;
+  border-left:14px solid var(--border); z-index:2;
+}
+.sf-step:not(:last-child)::before {
+  content:''; position:absolute; right:0; top:50%; transform:translateY(-50%);
+  width:0; height:0; border-top:13px solid transparent; border-bottom:13px solid transparent;
+  border-left:13px solid var(--surface); z-index:3;
+}
+.sf-step.highlight { background:var(--ember-l); }
+.sf-step.highlight::before { border-left-color:var(--ember-l); }
+.sf-step.highlight .sf-n { color:var(--ember); }
+.sf-n { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink-3); margin-bottom:4px; }
+.sf-label { font-size:12px; font-weight:500; color:var(--ink-2); }
+.sf-sub { font-size:11px; color:var(--ink-3); margin-top:2px; }
+
+/* INTERACTIVE DEMO */
+.demo-canvas {
+  display:grid; grid-template-columns:280px 1fr; gap:28px; align-items:start;
+}
+.demo-phone-wrap { position:sticky; top:72px; }
+
+/* PHONE */
+.phone {
+  width:260px; background:#1C1C1E; border-radius:44px;
+  padding:16px 12px; box-shadow:0 20px 60px rgba(0,0,0,0.35); margin:0 auto;
+}
+.phone-notch { width:90px; height:20px; background:#000; border-radius:10px; margin:0 auto 14px; }
+.phone-screen { background:#000; border-radius:32px; overflow:hidden; min-height:480px; position:relative; }
+.phone-wallpaper {
+  position:absolute; inset:0;
+  background:linear-gradient(160deg, #1A2A4A 0%, #0D1A2E 50%, #1A0D08 100%);
+}
+.phone-ui { position:relative; z-index:1; padding:16px 12px; }
+.phone-status { display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,0.7); margin-bottom:10px; font-weight:500; }
+.phone-time-big { font-size:52px; font-weight:200; color:white; letter-spacing:-2px; text-align:center; margin-bottom:2px; }
+.phone-date-small { font-size:12px; color:rgba(255,255,255,0.55); text-align:center; margin-bottom:18px; }
+
+/* CALL SCREEN */
+.call-screen { position:absolute; inset:0; background:linear-gradient(180deg,#1A2A1A,#0D1A0D); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; opacity:0; pointer-events:none; transition:opacity 0.4s; }
+.call-screen.active { opacity:1; pointer-events:all; }
+.call-avatar { width:72px; height:72px; border-radius:50%; background:rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:600; color:white; margin:0 auto 10px; font-family:'Fraunces',serif; border:2px solid rgba(255,255,255,0.2); }
+.call-name { font-size:18px; font-weight:600; color:white; text-align:center; margin-bottom:4px; }
+.call-company { font-size:13px; color:rgba(255,255,255,0.55); text-align:center; margin-bottom:6px; }
+.call-timer { font-family:'DM Mono',monospace; font-size:15px; color:rgba(255,255,255,0.5); text-align:center; margin-bottom:40px; }
+.call-btns { display:flex; gap:24px; }
+.call-btn { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; transition:all 0.15s; }
+.call-end { background:#FF3B30; }
+.call-end:hover { background:#D32F22; transform:scale(1.05); }
+.call-mute { background:rgba(255,255,255,0.15); }
+.call-speaker { background:rgba(255,255,255,0.15); }
+
+/* NOTIFICATION CARD */
+.notif-card {
+  background:rgba(30,30,32,0.85); backdrop-filter:blur(20px);
+  border-radius:14px; padding:14px 14px 10px; margin-bottom:10px;
+  border:1px solid rgba(255,255,255,0.1);
+  opacity:0; transform:translateY(-10px);
+  transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+.notif-card.show { opacity:1; transform:translateY(0); pointer-events:all; }
+.notif-top { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.notif-app-icon { width:24px; height:24px; border-radius:6px; background:var(--ember); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:white; font-family:'Fraunces',serif; flex-shrink:0; }
+.notif-app-name { font-size:11px; font-weight:600; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.4px; }
+.notif-time { font-size:11px; color:rgba(255,255,255,0.4); margin-left:auto; }
+.notif-title { font-size:14px; font-weight:600; color:white; margin-bottom:3px; }
+.notif-body { font-size:12.5px; color:rgba(255,255,255,0.7); margin-bottom:11px; line-height:1.45; }
+.notif-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.notif-btn {
+  padding:8px 6px; border-radius:9px; font-size:11.5px; font-weight:600;
+  text-align:center; cursor:pointer; transition:all 0.15s; border:none;
+  font-family:'DM Sans',sans-serif;
+}
+.nb-good  { background:rgba(46,110,72,0.75);  color:#7FDBA4; }
+.nb-fu    { background:rgba(192,70,10,0.75);   color:#FFB08A; }
+.nb-prop  { background:rgba(30,78,122,0.75);   color:#90C0E8; }
+.nb-dead  { background:rgba(80,80,80,0.5);     color:rgba(255,255,255,0.5); }
+.nb-good:hover  { background:rgba(46,110,72,1); }
+.nb-fu:hover    { background:rgba(192,70,10,1); }
+.nb-prop:hover  { background:rgba(30,78,122,1); }
+
+/* CONFIRMED STATE */
+.notif-confirmed {
+  background:rgba(46,110,72,0.2); border:1px solid rgba(46,110,72,0.4);
+  border-radius:10px; padding:10px 12px; text-align:center;
+  font-size:12.5px; color:#7FDBA4; line-height:1.5;
+}
+
+/* LOCK SCREEN CALL NOTIF */
+.lock-notif {
+  background:rgba(30,30,32,0.85); backdrop-filter:blur(20px);
+  border-radius:14px; padding:12px 14px; margin-bottom:8px;
+  border:1px solid rgba(255,255,255,0.1);
+  opacity:0; transform:translateY(-8px);
+  transition:all 0.4s ease 0.2s;
+}
+.lock-notif.show { opacity:1; transform:translateY(0); }
+.ln-top { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.ln-icon { width:22px; height:22px; border-radius:5px; background:#34C759; display:flex; align-items:center; justify-content:center; font-size:12px; }
+.ln-app { font-size:11px; color:rgba(255,255,255,0.6); font-weight:600; }
+.ln-time { font-size:11px; color:rgba(255,255,255,0.4); margin-left:auto; }
+.ln-text { font-size:13px; color:white; font-weight:500; margin-bottom:2px; }
+.ln-sub { font-size:12px; color:rgba(255,255,255,0.55); }
+
+/* STEP PANEL */
+.step-panel { display:flex; flex-direction:column; gap:20px; }
+.step-block {
+  background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r);
+  padding:20px; transition:all var(--trans);
+}
+.step-block.active { border-color:var(--ember); box-shadow:0 0 0 3px var(--ember-l); }
+.step-block.done { border-color:var(--green); background:#FAFEF8; }
+.sb-header { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.sb-num {
+  width:28px; height:28px; border-radius:50%; background:var(--parch-2);
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+  color:var(--ink-3); flex-shrink:0; transition:all var(--trans);
+}
+.step-block.active .sb-num { background:var(--ember); color:white; }
+.step-block.done .sb-num { background:var(--green); color:white; }
+.sb-title { font-size:14px; font-weight:600; color:var(--ink); }
+.step-block.done .sb-title { color:var(--green); }
+.sb-body { font-size:13px; color:var(--ink-2); line-height:1.6; }
+
+/* DATA WRITTEN */
+.data-written {
+  background:var(--parch-2); border-radius:var(--r-sm); padding:12px 14px; margin-top:12px;
+  font-family:'DM Mono',monospace; font-size:11.5px; color:var(--ink-2); line-height:1.8;
+}
+.dw-key { color:var(--ink-3); }
+.dw-val { color:var(--ink); }
+.dw-val.green { color:var(--green); }
+.dw-val.ember { color:var(--ember); }
+
+/* ACTION BUTTON */
+.btn-demo { background:var(--ember); color:white; padding:10px 22px; border-radius:var(--r-sm); font-size:13.5px; font-weight:500; cursor:pointer; transition:all var(--trans); display:inline-flex; align-items:center; gap:8px; margin-top:12px; }
+.btn-demo:hover { background:#A83A06; transform:translateY(-1px); }
+.btn-demo:active { transform:scale(0.98); }
+.btn-demo.green { background:var(--green); }
+.btn-demo.green:hover { background:#23603c; }
+.btn-demo.ghost { background:var(--parch-2); color:var(--ink-2); }
+.btn-demo.ghost:hover { background:var(--parch-3); }
+
+/* WHAT CHANGES PANEL */
+.what-changed {
+  background:var(--green-l); border:1.5px solid #A8D8C0; border-radius:var(--r);
+  padding:18px 20px; margin-top:16px; display:none;
+}
+.what-changed.vis { display:block; animation:slideDown 0.3s ease; }
+@keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.wc-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--green); margin-bottom:10px; }
+.wc-row { display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
+.wc-row:last-child { margin-bottom:0; }
+.wc-check { color:var(--green); font-size:14px; flex-shrink:0; margin-top:1px; }
+.wc-text { font-size:13px; color:var(--ink-2); line-height:1.5; }
+
+/* DAILY IMPACT */
+.impact-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px; }
+.impact-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; }
+.ic-num { font-family:'DM Mono',monospace; font-size:28px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+.ic-num.ember { color:var(--ember); }
+.ic-num.green { color:var(--green); }
+.ic-label { font-size:12px; color:var(--ink-3); line-height:1.4; }
+
+/* TODAY VIEW CHANGE */
+.today-card-preview {
+  background:var(--surface); border:1.5px solid var(--green); border-left:3px solid var(--green);
+  border-radius:var(--r); padding:14px 16px; margin-top:12px;
+}
+.tcp-eyebrow { font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--green); margin-bottom:6px; }
+.tcp-title { font-size:14px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+.tcp-sub { font-size:12.5px; color:var(--ink-3); }
+
+/* TIMER BAR */
+.timer-bar-wrap { height:3px; background:var(--parch-3); border-radius:2px; margin-top:8px; overflow:hidden; }
+.timer-bar { height:100%; background:var(--ember); border-radius:2px; width:0; }
+
+/* PROTOTYPE NAV */
+.proto-nav { position:fixed; bottom:0; left:0; right:0; background:rgba(247,243,238,0.96); backdrop-filter:blur(12px); border-top:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; justify-content:center; gap:8px; z-index:9997; flex-wrap:wrap; }
+.pnav-btn { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:500; border:1px solid var(--border); background:transparent; color:var(--ink-2); cursor:pointer; transition:all var(--trans); }
+.pnav-btn:hover { background:var(--parch-2); }
+.pnav-btn.active { background:var(--ember); color:white; border-color:var(--ember); }
+.pnav-label { font-size:11px; color:var(--ink-4); font-family:'DM Mono',monospace; }
+
+/* TOAST */
+.toast { position:fixed; bottom:64px; right:24px; background:var(--ink); color:white; padding:11px 16px; border-radius:var(--r); font-size:13px; z-index:9998; display:flex; align-items:center; gap:10px; opacity:0; transform:translateY(6px); transition:all 0.25s; pointer-events:none; }
+.toast.show { opacity:1; transform:translateY(0); }
+.t-icon { color:#6FDC9F; }
+
+/* DISMISSED STATE */
+.call-dismissed { padding:20px; text-align:center; }
+.cd-text { font-size:13px; color:rgba(255,255,255,0.55); margin-bottom:8px; }
+.cd-note { font-size:11.5px; color:rgba(255,255,255,0.35); font-style:italic; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">Rel<em>a</em>y</div>
+  <span class="top-bar-title">Addition 1 — from PocketCRM · 2-Tap Post-Call Capture</span>
+  <a class="back-link" href="relay-ux-complete.html">← Back to full prototype</a>
+</div>
+
+<div class="toast" id="toast"><span class="t-icon">✓</span><span id="t-msg"></span></div>
+
+<div class="shell">
+
+  <!-- BANNER -->
+  <div class="addition-banner" style="margin-top:64px">
+    <div style="flex:1">
+      <div class="ab-source">Sourced from PocketCRM · Stage 3 addition · Does not affect core MVP</div>
+      <div class="ab-title">2-Tap Post-Call <em>Capture</em></div>
+      <div class="ab-desc">Relay's MVP is blind to cellular phone calls. They don't appear in your calendar. They generate no signal. But they're often the warmest conversations in your pipeline — the prospect who says "just call me" is the one who's interested. This addition closes that blindspot with two taps, in 5 seconds, before you've put your phone down.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="ab-badge"><strong>2 taps</strong>All it takes</div>
+      <div class="ab-badge"><strong>5 sec</strong>After call ends</div>
+      <div class="ab-badge"><strong>0</strong>Audio recorded</div>
+    </div>
+  </div>
+
+  <!-- WHAT RELAY COULD AND COULDN'T DO BEFORE -->
+  <div class="demo-section">
+    <div class="section-title">What Relay could — and couldn't — see</div>
+    <div class="section-sub">The core MVP captures everything via email and calendar. But there's one gap it couldn't close without a mobile moment.</div>
+    <div class="before-after">
+      <div class="ba-col ba-before">
+        <div class="ba-label">Relay without this addition</div>
+        <ul class="ba-list">
+          <li>Video calls (Zoom, Meet, Teams) — ✓ detected via calendar</li>
+          <li>Scheduled desk calls — ✓ detected via calendar event</li>
+          <li>Phone calls where founder dials out — ✗ invisible</li>
+          <li>Inbound "just call me" calls — ✗ invisible</li>
+          <li>WhatsApp voice calls — ✗ invisible</li>
+          <li>Post-call drafts for phone calls — ✗ never triggered</li>
+        </ul>
+      </div>
+      <div class="ba-col ba-after">
+        <div class="ba-label">Relay with this addition</div>
+        <ul class="ba-list">
+          <li>Video calls (Zoom, Meet, Teams) — ✓ detected via calendar</li>
+          <li>Scheduled desk calls — ✓ detected via calendar event</li>
+          <li>Phone calls where founder dials out — ✓ detected via call log</li>
+          <li>Inbound "just call me" calls — ✓ detected via call log</li>
+          <li>WhatsApp voice calls — ✓ detected via CallKit (iOS) / call log (Android)</li>
+          <li>Post-call drafts for phone calls — ✓ queued via 2-tap outcome</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOW EXPLAINER -->
+  <div class="demo-section">
+    <div class="section-title">How the trigger works</div>
+    <div class="section-sub">No audio. No recording. Just call metadata — who, when, how long — and a notification that fires before you've moved on.</div>
+    <div class="stage-flow">
+      <div class="sf-step">
+        <div class="sf-n">Step 1</div>
+        <div class="sf-label">Call ends</div>
+        <div class="sf-sub">OS fires call-end event</div>
+      </div>
+      <div class="sf-step">
+        <div class="sf-n">Step 2</div>
+        <div class="sf-label">Number matched</div>
+        <div class="sf-sub">Against contacts + calendar ±15min</div>
+      </div>
+      <div class="sf-step highlight">
+        <div class="sf-n">Step 3</div>
+        <div class="sf-label">Notification fires</div>
+        <div class="sf-sub">Within 5 seconds · 2 taps</div>
+      </div>
+      <div class="sf-step">
+        <div class="sf-n">Step 4</div>
+        <div class="sf-label">Data written</div>
+        <div class="sf-sub">Activity, warmth, draft queued</div>
+      </div>
+      <div class="sf-step">
+        <div class="sf-n">Step 5</div>
+        <div class="sf-label">Today view updated</div>
+        <div class="sf-sub">Draft surfaced next morning</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE DEMO -->
+  <div class="demo-section">
+    <div class="section-title">Interactive demo — walk through the full flow</div>
+    <div class="section-sub">Tap through each step. The phone on the left shows exactly what the founder experiences.</div>
+
+    <div class="demo-canvas">
+
+      <!-- PHONE -->
+      <div class="demo-phone-wrap">
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" id="phone-screen">
+            <div class="phone-wallpaper"></div>
+
+            <!-- DEFAULT: LOCK SCREEN -->
+            <div class="phone-ui" id="state-lock">
+              <div class="phone-status"><span>9:41</span><span>●●●●</span></div>
+              <div class="phone-time-big">1:48</div>
+              <div class="phone-date-small">Tuesday, 11 March</div>
+              <div class="lock-notif" id="ln-call" style="display:none">
+                <div class="ln-top"><span class="ln-icon">📞</span><span class="ln-app">Phone</span><span class="ln-time">now</span></div>
+                <div class="ln-text">Priya Sharma</div>
+                <div class="ln-sub">Incoming call · Acme Corp</div>
+              </div>
+            </div>
+
+            <!-- CALL IN PROGRESS -->
+            <div class="call-screen" id="state-call">
+              <div class="call-avatar">P</div>
+              <div class="call-name">Priya Sharma</div>
+              <div class="call-company">Acme Corp · Mobile</div>
+              <div class="call-timer" id="call-timer">00:00</div>
+              <div class="call-btns">
+                <div class="call-btn call-mute">🔇</div>
+                <div class="call-btn call-end" id="end-call-btn" onclick="endCall()">📵</div>
+                <div class="call-btn call-speaker">🔊</div>
+              </div>
+            </div>
+
+            <!-- POST-CALL: NOTIFICATION -->
+            <div class="phone-ui" id="state-notif" style="display:none">
+              <div class="phone-status"><span>9:41</span><span>●●●●</span></div>
+              <div class="phone-time-big">2:11</div>
+              <div class="phone-date-small">Tuesday, 11 March</div>
+              <div class="notif-card" id="relay-notif">
+                <div class="notif-top">
+                  <div class="notif-app-icon">R</div>
+                  <span class="notif-app-name">Relay</span>
+                  <span class="notif-time">now</span>
+                </div>
+                <div class="notif-title">Call ended · 23 min with Priya</div>
+                <div class="notif-body">Priya Sharma · Acme Corp<br>How did it go?</div>
+                <div class="notif-actions" id="notif-action-area">
+                  <button class="notif-btn nb-good"  onclick="tapOutcome('good_call',  'Good call',   this)">Good call</button>
+                  <button class="notif-btn nb-fu"     onclick="tapOutcome('followup',   'Needs follow-up', this)">Needs follow-up</button>
+                  <button class="notif-btn nb-prop"   onclick="tapOutcome('proposal',   'Sent proposal', this)">Sent proposal</button>
+                  <button class="notif-btn nb-dead"   onclick="tapOutcome('dead',       'Dead', this)">Dead</button>
+                </div>
+              </div>
+              <!-- Dimmed other notif -->
+              <div class="notif-card show" style="opacity:0.35;margin-top:6px;pointer-events:none">
+                <div class="notif-top">
+                  <div class="notif-app-icon" style="background:#007AFF;font-family:'DM Sans',sans-serif;font-size:12px">M</div>
+                  <span class="notif-app-name">Messages</span>
+                  <span class="notif-time">8m ago</span>
+                </div>
+                <div class="notif-title">James Liu</div>
+                <div class="notif-body" style="font-size:12px">Sounds good, let's connect Thursday</div>
+              </div>
+            </div>
+
+          </div><!-- /phone-screen -->
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:11.5px;color:var(--ink-3)">Tap the red button to end the call</div>
+      </div>
+
+      <!-- STEP PANEL -->
+      <div class="step-panel">
+
+        <div class="step-block active" id="step-1">
+          <div class="sb-header">
+            <div class="sb-num">1</div>
+            <div class="sb-title">Incoming call — Priya Sharma</div>
+          </div>
+          <div class="sb-body">
+            A call comes in from Priya Sharma's mobile number. Relay recognises it instantly — it matched the number against Priya's contact record when the app was first connected. The call log event fires: contact identified, duration tracking begins.
+            <br><br>
+            <strong>What Relay does in the background:</strong> logs call start time, timestamps the call against any calendar event within ±15 minutes (none here — this was a surprise call), confirms match confidence: High.
+          </div>
+          <button class="btn-demo" onclick="startCall()">Simulate incoming call →</button>
+        </div>
+
+        <div class="step-block" id="step-2">
+          <div class="sb-header">
+            <div class="sb-num">2</div>
+            <div class="sb-title">Call in progress — 23 minutes</div>
+          </div>
+          <div class="sb-body">
+            The call runs. Relay does nothing during the call — no recording, no audio access, no monitoring. It simply waits for the call-end OS event.
+            <br><br>
+            <strong>On Android:</strong> READ_CALL_LOG permission detects call end.<br>
+            <strong>On iOS:</strong> CallKit fires a call-ended event with duration and contact ID. Same mechanism used by Truecaller — no App Store risk.
+            <br><br>
+            <em style="color:var(--ink-3)">Tap the red button on the phone to end the call.</em>
+          </div>
+        </div>
+
+        <div class="step-block" id="step-3">
+          <div class="sb-header">
+            <div class="sb-num">3</div>
+            <div class="sb-title">Notification fires — 5 seconds after call ends</div>
+          </div>
+          <div class="sb-body">
+            The notification appears while the founder is still holding the phone. Relay has pre-filled everything from the contact match — no typing required. One tap to expand, one tap to select outcome.
+            <br><br>
+            <strong>Design principle:</strong> No app open. No navigation. The notification itself is the interaction surface.
+          </div>
+        </div>
+
+        <div class="step-block" id="step-4">
+          <div class="sb-header">
+            <div class="sb-num">4</div>
+            <div class="sb-title">Tap an outcome — 4 options, one tap</div>
+          </div>
+          <div class="sb-body" id="step-4-body">
+            Each option maps directly to a signal update. No free text. No form. Just the tap.
+            <br><br>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+              <div style="background:var(--green-l);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:2px">GOOD CALL</div><div style="font-size:12px;color:var(--ink-2)">Warmth → Hot. Silence gap resets. Draft queued.</div></div>
+              <div style="background:var(--ember-l);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;font-weight:700;color:var(--ember);margin-bottom:2px">NEEDS FOLLOW-UP</div><div style="font-size:12px;color:var(--ink-2)">Action created. Urgency +20. Draft queued.</div></div>
+              <div style="background:var(--blue-l);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:2px">SENT PROPOSAL</div><div style="font-size:12px;color:var(--ink-2)">Stage → Proposal Out (pending approval).</div></div>
+              <div style="background:var(--parch-2);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:2px">DEAD</div><div style="font-size:12px;color:var(--ink-2)">Warmth → Cold. Closed Lost suggested.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-block" id="step-5">
+          <div class="sb-header">
+            <div class="sb-num">5</div>
+            <div class="sb-title" id="step5-title">Data written to Relay</div>
+          </div>
+          <div class="sb-body" id="step-5-body">
+            Tap an outcome above first — then see exactly what gets written to the data model here.
+          </div>
+        </div>
+
+        <div class="step-block" id="step-6">
+          <div class="sb-header">
+            <div class="sb-num">6</div>
+            <div class="sb-title">Tomorrow morning — digest surfaces the draft</div>
+          </div>
+          <div class="sb-body">
+            If the outcome was Good call or Needs follow-up, the auto-draft job runs using the pre-call email thread as context plus the call outcome as a hint. By the next morning, this appears in the digest exactly as a post-calendar-meeting draft would.
+          </div>
+          <div class="today-card-preview" id="draft-preview" style="display:none">
+            <div class="tcp-eyebrow">✉️ Draft ready · Tomorrow's digest</div>
+            <div class="tcp-title">Priya Sharma · Acme Corp</div>
+            <div class="tcp-sub" id="draft-preview-text">Post-call follow-up ready — based on pre-call email thread and your outcome signal.</div>
+          </div>
+          <div class="what-changed" id="what-changed-block">
+            <div class="wc-title">What just changed in Relay</div>
+            <div id="what-changed-items"></div>
+          </div>
+        </div>
+
+      </div><!-- /step-panel -->
+    </div><!-- /demo-canvas -->
+  </div>
+
+  <!-- IF FOUNDER IGNORES THE NOTIFICATION -->
+  <div class="demo-section">
+    <div class="section-title">What if the founder ignores the notification?</div>
+    <div class="section-sub">No forced input. Ever. Here's what gets written when the notification is dismissed without a tap.</div>
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:20px">
+      <div class="data-written">
+        <div><span class="dw-key">type: </span><span class="dw-val">call_detected</span> <span style="color:var(--ink-4);font-size:11px">(not call_inferred — no outcome provided)</span></div>
+        <div><span class="dw-key">date: </span><span class="dw-val">2026-03-11 14:11</span></div>
+        <div><span class="dw-key">duration_minutes: </span><span class="dw-val">23</span></div>
+        <div><span class="dw-key">contact_id: </span><span class="dw-val">priya-sharma-acme</span></div>
+        <div><span class="dw-key">call_outcome: </span><span class="dw-val" style="color:var(--ink-3)">null</span></div>
+        <div><span class="dw-key">warmth_change: </span><span class="dw-val" style="color:var(--ink-3)">none — no signal written</span></div>
+        <div><span class="dw-key">draft_triggered: </span><span class="dw-val" style="color:var(--ink-3)">false</span></div>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:var(--ink-2)">The call appears in the activity timeline as an event. No warmth signal is written. No false data. The founder's deliberate silence is respected — better than a wrong signal.</div>
+    </div>
+  </div>
+
+  <!-- IMPACT -->
+  <div class="demo-section">
+    <div class="section-title">What this closes</div>
+    <div class="impact-grid">
+      <div class="impact-card"><div class="ic-num ember">100%</div><div class="ic-label">Of phone calls now visible in the activity timeline</div></div>
+      <div class="impact-card"><div class="ic-num green">+1</div><div class="ic-label">New draft trigger path — phone calls now queue drafts like calendar meetings</div></div>
+      <div class="impact-card"><div class="ic-num">0</div><div class="ic-label">New behaviour required — intercepts an existing post-call moment</div></div>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<!-- PROTO NAV -->
+<div class="proto-nav">
+  <span class="pnav-label">DEMOS →</span>
+  <button class="pnav-btn active">Addition 1 · Post-call capture</button>
+  <button class="pnav-btn" onclick="window.location.href='relay-addition-2-sms.html'">Addition 2 · SMS retrieval</button>
+  <button class="pnav-btn" onclick="window.location.href='relay-ux-complete.html'">Full prototype</button>
+</div>
+
+<script>
+let callInterval, callSeconds = 0, callStarted = false;
+let chosenOutcome = null;
+
+function startCall() {
+  if (callStarted) return;
+  callStarted = true;
+
+  // Show call screen
+  document.getElementById('state-lock').style.display = 'none';
+  document.getElementById('state-call').classList.add('active');
+
+  // Activate step 2
+  document.getElementById('step-1').classList.remove('active');
+  document.getElementById('step-1').classList.add('done');
+  document.getElementById('step-1').querySelector('.sb-num').textContent = '✓';
+  document.getElementById('step-2').classList.add('active');
+
+  // Start timer
+  callInterval = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+    const s = String(callSeconds%60).padStart(2,'0');
+    document.getElementById('call-timer').textContent = m + ':' + s;
+  }, 1000);
+}
+
+function endCall() {
+  clearInterval(callInterval);
+
+  // Step 2 done
+  document.getElementById('step-2').classList.remove('active');
+  document.getElementById('step-2').classList.add('done');
+  document.getElementById('step-2').querySelector('.sb-num').textContent = '✓';
+
+  // Hide call screen
+  document.getElementById('state-call').classList.remove('active');
+
+  // Show notification state after 0.6s
+  setTimeout(() => {
+    document.getElementById('state-notif').style.display = 'block';
+    setTimeout(() => {
+      document.getElementById('relay-notif').classList.add('show');
+      // Step 3 active
+      document.getElementById('step-3').classList.add('active');
+    }, 200);
+    setTimeout(() => {
+      document.getElementById('step-3').classList.remove('active');
+      document.getElementById('step-3').classList.add('done');
+      document.getElementById('step-3').querySelector('.sb-num').textContent = '✓';
+      document.getElementById('step-4').classList.add('active');
+    }, 1400);
+  }, 600);
+}
+
+const outcomeData = {
+  good_call: {
+    label: 'Good call',
+    color: '#2E6E48',
+    data: [
+      ['type','call_inferred'],
+      ['date','2026-03-11 14:11'],
+      ['duration_minutes','23'],
+      ['contact_id','priya-sharma-acme'],
+      ['call_outcome','good_call','green'],
+      ['warmth_change','Warm → Hot','green'],
+      ['silence_gap_reset','true','green'],
+      ['reconstruction_triggered','true','green'],
+      ['draft_triggered','true','green'],
+    ],
+    draftText: 'Post-call follow-up queued · "Good call" signal sent to LLM as context for draft tone',
+    changes: [
+      'Activity created: <strong>call_inferred</strong> · 23 min · Priya Sharma',
+      'Warmth updated: <strong>Warm → Hot</strong>',
+      'Silence gap reset to 0',
+      'Context reconstruction job triggered (uses email thread + "good_call" hint)',
+      'Post-call draft queued — will appear in tomorrow\'s morning digest',
+    ]
+  },
+  followup: {
+    label: 'Needs follow-up',
+    color: '#C0460A',
+    data: [
+      ['type','call_inferred'],
+      ['date','2026-03-11 14:11'],
+      ['duration_minutes','23'],
+      ['contact_id','priya-sharma-acme'],
+      ['call_outcome','needs_followup','ember'],
+      ['warmth_change','Warm (unchanged)',''],
+      ['urgency_score_delta','+20','ember'],
+      ['action_created','follow_up · urgency: high','ember'],
+      ['draft_triggered','true','ember'],
+    ],
+    draftText: 'Follow-up draft queued · "Needs follow-up" used as LLM hint — draft likely to reference unresolved thread',
+    changes: [
+      'Activity created: <strong>call_inferred</strong> · 23 min',
+      'Follow-up Action created · urgency_score +20',
+      'Draft queued for morning digest',
+      'Warmth unchanged — outcome was ambiguous, not negative',
+      'Notion write-back queued: call noted in activity log (pending approval)',
+    ]
+  },
+  proposal: {
+    label: 'Sent proposal',
+    color: '#1E4E7A',
+    data: [
+      ['type','call_inferred'],
+      ['date','2026-03-11 14:11'],
+      ['duration_minutes','23'],
+      ['contact_id','priya-sharma-acme'],
+      ['call_outcome','sent_proposal',''],
+      ['stage_change_suggested','In Conversation → Proposal Out',''],
+      ['stage_change_status','pending_approval',''],
+      ['pending_queue_item','created',''],
+      ['draft_triggered','false (stage change takes priority)',''],
+    ],
+    draftText: 'No draft queued — stage change approval surfaced instead. Appears in Pending queue.',
+    changes: [
+      'Activity created: <strong>call_inferred</strong> · 23 min',
+      'Stage change queued: <strong>Proposal Out</strong> — will appear in Pending for your approval',
+      'Note: no email attachment detected yet — soft signal only',
+      'Pending badge updated: Pending (5)',
+      'No auto-draft — founder should write proposal email manually',
+    ]
+  },
+  dead: {
+    label: 'Dead',
+    color: '#555',
+    data: [
+      ['type','call_inferred'],
+      ['date','2026-03-11 14:11'],
+      ['duration_minutes','23'],
+      ['contact_id','priya-sharma-acme'],
+      ['call_outcome','dead',''],
+      ['warmth_change','Warm → Cold',''],
+      ['momentum','dead',''],
+      ['closed_lost_suggested','true',''],
+      ['off_track_item_created','true',''],
+    ],
+    draftText: null,
+    changes: [
+      'Activity created: <strong>call_inferred</strong> · 23 min',
+      'Warmth updated: <strong>Warm → Cold</strong>',
+      'Momentum flagged: <strong>Dead</strong>',
+      'Off Track item created: "Priya Sharma — deal flagged as lost"',
+      'Closed Lost confirmation surfaced in Today view — your decision to confirm',
+    ]
+  }
+};
+
+function tapOutcome(key, label, btn) {
+  if (!document.getElementById('step-4').classList.contains('active') && !document.getElementById('step-4').classList.contains('done')) {
+    toast('Complete the call flow first — click Step 1 button above');
+    return;
+  }
+  chosenOutcome = key;
+  const d = outcomeData[key];
+
+  // Update notification
+  document.getElementById('notif-action-area').innerHTML = `<div class="notif-confirmed">✓ Logged: <strong style="color:white">${d.label}</strong><br><span style="font-size:11px;opacity:0.75">Activity created · Relay updated</span></div>`;
+
+  // Step 4 done
+  document.getElementById('step-4').classList.remove('active');
+  document.getElementById('step-4').classList.add('done');
+  document.getElementById('step-4').querySelector('.sb-num').textContent = '✓';
+
+  // Step 5: data written
+  document.getElementById('step-5').classList.add('active');
+  document.getElementById('step5-title').textContent = 'Data written to Relay — ' + d.label;
+  let html = '<div class="data-written">';
+  d.data.forEach(row => {
+    html += `<div><span class="dw-key">${row[0]}: </span><span class="dw-val ${row[2]||''}">${row[1]}</span></div>`;
+  });
+  html += '</div>';
+  document.getElementById('step-5-body').innerHTML = html;
+
+  // Slight delay then step 5 done, step 6 active
+  setTimeout(() => {
+    document.getElementById('step-5').classList.remove('active');
+    document.getElementById('step-5').classList.add('done');
+    document.getElementById('step-5').querySelector('.sb-num').textContent = '✓';
+    document.getElementById('step-6').classList.add('active');
+
+    // Draft preview
+    if (d.draftText) {
+      const dp = document.getElementById('draft-preview');
+      dp.style.display = 'block';
+      document.getElementById('draft-preview-text').textContent = d.draftText;
+    }
+
+    // What changed
+    const wcBlock = document.getElementById('what-changed-block');
+    let wcHtml = '';
+    d.changes.forEach(c => {
+      wcHtml += `<div class="wc-row"><span class="wc-check">✓</span><span class="wc-text">${c}</span></div>`;
+    });
+    document.getElementById('what-changed-items').innerHTML = wcHtml;
+    wcBlock.classList.add('vis');
+
+  }, 1000);
+
+  toast(d.label + ' logged · Activity created in Relay');
+}
+
+let toastT;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('t-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

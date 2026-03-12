@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay — Addition 2: SMS On-Demand Retrieval</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#16120E; --ink-2:#4A4238; --ink-3:#8C7E72; --ink-4:#B8AFA7;
+  --parch:#F7F3EE; --parch-2:#EDE7DF; --parch-3:#E2D9CE;
+  --border:#D8CEC3; --bord-str:#C0B3A4; --surface:#FFFFFF;
+  --ember:#C0460A; --ember-l:#F5E4DA;
+  --green:#2E6E48; --green-l:#DEF0E6;
+  --amber:#9A6A0A; --amber-l:#F5EACC;
+  --blue:#1E4E7A; --blue-l:#DDE9F5;
+  --r:10px; --r-sm:6px;
+  --trans:0.18s cubic-bezier(0.4,0,0.2,1);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+body{font-family:'DM Sans',sans-serif;background:var(--parch);color:var(--ink);min-height:100vh}
+button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none;outline:none}
+
+.top-bar { position:fixed; top:0; left:0; right:0; height:52px; background:var(--parch); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 28px; gap:20px; z-index:200; }
+.logo { font-family:'Fraunces',serif; font-size:18px; font-weight:400; color:var(--ink); }
+.logo em { color:var(--ember); font-style:italic; }
+.back-link { font-size:12.5px; color:var(--ember); text-decoration:underline; text-underline-offset:3px; cursor:pointer; margin-left:auto; }
+
+.shell { max-width:1100px; margin:0 auto; padding:40px 28px 120px; }
+
+/* BANNER */
+.addition-banner { background:var(--blue); color:white; border-radius:var(--r); padding:28px 32px; margin-bottom:32px; margin-top:64px; display:flex; align-items:flex-start; gap:20px; }
+.ab-source { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:1.5px; color:rgba(255,255,255,0.45); margin-bottom:8px; }
+.ab-title { font-family:'Fraunces',serif; font-size:28px; font-weight:400; line-height:1.15; letter-spacing:-0.4px; margin-bottom:8px; }
+.ab-title em { font-style:italic; color:#90C8F0; }
+.ab-desc { font-size:13.5px; color:rgba(255,255,255,0.7); line-height:1.6; max-width:560px; }
+.ab-badge { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); border-radius:var(--r-sm); padding:8px 14px; font-size:12px; color:rgba(255,255,255,0.6); white-space:nowrap; flex-shrink:0; text-align:center; }
+.ab-badge strong { display:block; font-size:16px; color:white; margin-bottom:2px; }
+
+.section-title { font-family:'Fraunces',serif; font-size:21px; font-weight:400; color:var(--ink); margin-bottom:6px; letter-spacing:-0.3px; }
+.section-sub { font-size:13.5px; color:var(--ink-3); line-height:1.6; margin-bottom:22px; }
+.demo-section { margin-bottom:48px; }
+
+/* ENVOY VS RELAY */
+.comparison { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:28px; }
+.cmp-col { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); padding:18px 20px; }
+.cmp-col.theirs { border-color:var(--red,#A83020); background:#FFF8F8; }
+.cmp-col.ours { border-color:var(--blue); background:#F6FAFF; }
+.cmp-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:10px; }
+.cmp-col.theirs .cmp-label { color:#A83020; }
+.cmp-col.ours .cmp-label { color:var(--blue); }
+.cmp-title { font-size:14px; font-weight:600; color:var(--ink); margin-bottom:8px; }
+.cmp-list { list-style:none; display:flex; flex-direction:column; gap:6px; }
+.cmp-list li { font-size:13px; color:var(--ink-2); display:flex; gap:8px; align-items:flex-start; }
+.cmp-list li.bad::before { content:'✗'; color:#A83020; flex-shrink:0; margin-top:1px; }
+.cmp-list li.good::before { content:'✓'; color:var(--blue); flex-shrink:0; margin-top:1px; }
+
+/* MOMENT CARDS */
+.moment-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+.moment-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); padding:16px; }
+.mc-emoji { font-size:24px; margin-bottom:10px; }
+.mc-title { font-size:13px; font-weight:600; color:var(--ink); margin-bottom:4px; }
+.mc-text { font-size:12.5px; color:var(--ink-3); line-height:1.5; }
+.mc-highlight { background:var(--blue-l); border-color:var(--blue); }
+.mc-highlight .mc-title { color:var(--blue); }
+
+/* MAIN DEMO */
+.demo-grid { display:grid; grid-template-columns:300px 1fr; gap:28px; align-items:start; }
+.phone-sticky { position:sticky; top:72px; }
+
+/* PHONE */
+.phone { width:280px; background:#1C1C1E; border-radius:48px; padding:18px 14px; box-shadow:0 20px 60px rgba(0,0,0,0.35); margin:0 auto; }
+.phone-notch { width:100px; height:22px; background:#000; border-radius:11px; margin:0 auto 14px; }
+.phone-screen { background:#EFEFF4; border-radius:36px; overflow:hidden; }
+
+/* iMESSAGE UI */
+.imsg-header { background:#F2F2F7; padding:12px 14px 10px; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(0,0,0,0.08); }
+.imsg-back { color:#007AFF; font-size:18px; cursor:pointer; }
+.imsg-avatar { width:36px; height:36px; border-radius:50%; background:var(--ember); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:white; font-family:'Fraunces',serif; flex-shrink:0; }
+.imsg-name { font-size:13.5px; font-weight:600; color:#000; }
+.imsg-sub { font-size:11px; color:#8E8E93; }
+
+.imsg-messages { padding:14px 12px; min-height:360px; max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; background:#EFEFF4; }
+.imsg-time { font-size:10.5px; color:#8E8E93; text-align:center; margin:4px 0; }
+.bubble { max-width:78%; padding:9px 12px; border-radius:18px; font-size:13px; line-height:1.45; white-space:pre-line; }
+.bubble.out { background:#007AFF; color:white; align-self:flex-end; border-bottom-right-radius:4px; }
+.bubble.in  { background:#FFFFFF; color:#000; align-self:flex-start; border-bottom-left-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.08); }
+.bubble.in .action-pill { display:inline-block; margin-top:6px; background:#007AFF; color:white; font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:12px; cursor:pointer; text-decoration:none; }
+
+.imsg-footer { background:#F2F2F7; padding:8px 12px; display:flex; gap:8px; align-items:center; border-top:1px solid rgba(0,0,0,0.08); }
+.imsg-input { flex:1; background:#fff; border:1px solid rgba(0,0,0,0.12); border-radius:18px; padding:8px 13px; font-size:13px; color:#000; font-family:'DM Sans',sans-serif; outline:none; }
+.imsg-input::placeholder { color:#8E8E93; }
+.imsg-send { width:30px; height:30px; background:#007AFF; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; color:white; cursor:pointer; flex-shrink:0; border:none; }
+
+/* SCENARIO PANEL */
+.scenario-panel { display:flex; flex-direction:column; gap:0; }
+
+.scenario-head { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r) var(--r) 0 0; border-bottom:none; cursor:pointer; transition:all var(--trans); }
+.scenario-head.first { border-radius:var(--r); margin-bottom:8px; border-bottom:1.5px solid var(--border); }
+.scenario-head:hover { background:var(--parch); }
+.scenario-head.active { background:var(--blue-l); border-color:var(--blue); }
+.sh-num { width:26px; height:26px; border-radius:50%; background:var(--parch-2); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--ink-3); flex-shrink:0; }
+.scenario-head.active .sh-num { background:var(--blue); color:white; }
+.sh-title { font-size:13.5px; font-weight:500; color:var(--ink); flex:1; }
+.sh-tag { font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; flex-shrink:0; }
+.tag-retrieval { background:var(--blue-l); color:var(--blue); }
+.tag-action { background:var(--green-l); color:var(--green); }
+.tag-scope { background:var(--parch-2); color:var(--ink-3); }
+
+.scenario-body { background:var(--surface); border:1.5px solid var(--border); border-top:none; border-radius:0 0 var(--r) var(--r); padding:0; overflow:hidden; max-height:0; transition:max-height 0.4s ease, padding 0.3s ease; }
+.scenario-body.open { max-height:600px; padding:16px 18px 18px; }
+
+.sb-explain { font-size:13px; color:var(--ink-2); line-height:1.6; margin-bottom:14px; }
+.sb-query-example { background:var(--parch-2); border-radius:var(--r-sm); padding:10px 14px; font-family:'DM Mono',monospace; font-size:12.5px; color:var(--ink); margin-bottom:12px; }
+.sb-query-label { font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink-3); margin-bottom:5px; }
+
+.sb-response { background:white; border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px; margin-bottom:12px; }
+.sr-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--blue); margin-bottom:6px; }
+.sr-text { font-size:13px; color:var(--ink); line-height:1.6; white-space:pre-line; }
+
+.sb-what-happened { background:var(--green-l); border:1px solid #A8D8C0; border-radius:var(--r-sm); padding:10px 13px; font-size:12.5px; color:var(--ink-2); line-height:1.6; }
+.swh-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--green); margin-bottom:5px; }
+
+.try-it-btn { background:var(--blue); color:white; padding:9px 20px; border-radius:var(--r-sm); font-size:13px; font-weight:500; cursor:pointer; transition:all var(--trans); display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; }
+.try-it-btn:hover { background:#163D60; }
+.try-it-btn:active { transform:scale(0.98); }
+
+/* SCOPE BOUNDARY */
+.scope-section { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:28px; }
+.scope-header { background:var(--parch-2); padding:14px 18px; border-bottom:1px solid var(--border); }
+.scope-header h3 { font-size:13px; font-weight:600; color:var(--ink); }
+.scope-body { padding:18px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.scope-col-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; }
+.scope-can .scope-col-label { color:var(--green); }
+.scope-cant .scope-col-label { color:var(--ink-3); }
+.scope-list { list-style:none; display:flex; flex-direction:column; gap:7px; }
+.scope-list li { font-size:13px; color:var(--ink-2); display:flex; gap:8px; align-items:flex-start; }
+.scope-can .scope-list li::before { content:'✓'; color:var(--green); flex-shrink:0; }
+.scope-cant .scope-list li::before { content:'✗'; color:var(--ink-3); flex-shrink:0; }
+
+/* HOW RELAY VS DIGEST */
+.channel-compare { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:28px; }
+.cc-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); padding:16px 18px; }
+.cc-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--ink-3); margin-bottom:10px; }
+.cc-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--parch-2); font-size:13px; }
+.cc-row:last-child { border-bottom:none; }
+.cc-key { color:var(--ink-3); }
+.cc-val { font-weight:500; color:var(--ink); text-align:right; }
+
+/* IMPACT */
+.impact-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px; }
+.impact-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; }
+.ic-num { font-family:'DM Mono',monospace; font-size:28px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+.ic-num.blue { color:var(--blue); }
+.ic-num.green { color:var(--green); }
+.ic-label { font-size:12px; color:var(--ink-3); line-height:1.4; }
+
+/* PROTO NAV */
+.proto-nav { position:fixed; bottom:0; left:0; right:0; background:rgba(247,243,238,0.96); backdrop-filter:blur(12px); border-top:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; justify-content:center; gap:8px; z-index:9997; flex-wrap:wrap; }
+.pnav-btn { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:500; border:1px solid var(--border); background:transparent; color:var(--ink-2); cursor:pointer; transition:all var(--trans); }
+.pnav-btn:hover { background:var(--parch-2); }
+.pnav-btn.active { background:var(--blue); color:white; border-color:var(--blue); }
+.pnav-label { font-size:11px; color:var(--ink-4); font-family:'DM Mono',monospace; }
+
+.toast { position:fixed; bottom:64px; right:24px; background:var(--ink); color:white; padding:11px 16px; border-radius:var(--r); font-size:13px; z-index:9998; display:flex; align-items:center; gap:10px; opacity:0; transform:translateY(6px); transition:all 0.25s; pointer-events:none; }
+.toast.show { opacity:1; transform:translateY(0); }
+.t-icon { color:#6FDC9F; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">Rel<em>a</em>y</div>
+  <span style="font-size:13px;color:var(--ink-3)">Addition 2 — from Envoy · SMS On-Demand Retrieval</span>
+  <a class="back-link" href="relay-ux-complete.html">← Back to full prototype</a>
+</div>
+
+<div class="toast" id="toast"><span class="t-icon">✓</span><span id="t-msg"></span></div>
+
+<div class="shell">
+
+  <!-- BANNER -->
+  <div class="addition-banner">
+    <div style="flex:1">
+      <div class="ab-source">Sourced from Envoy · Stage 4 addition · Interaction model, not architecture</div>
+      <div class="ab-title">On-demand retrieval via <em>SMS</em></div>
+      <div class="ab-desc">Relay's web app is where you manage your pipeline. But the moment you actually need context — walking to a meeting, in a cab, between calls — you don't have the app open. You have your phone. This addition puts Relay's on-demand retrieval into a text message. Ask anything about any deal. Get a real answer in 3 seconds. No app. No navigation.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="ab-badge"><strong>SMS</strong>Universal, no install</div>
+      <div class="ab-badge"><strong>&lt;3s</strong>Response time</div>
+      <div class="ab-badge"><strong>iMessage</strong>Auto on iOS</div>
+    </div>
+  </div>
+
+  <!-- WHAT ENVOY GOT RIGHT + WRONG -->
+  <div class="demo-section">
+    <div class="section-title">What Envoy got right — and what Relay does differently</div>
+    <div class="section-sub">Envoy's core insight was correct: founders need to query their pipeline from wherever they are, in natural language, without opening an app. But the architecture Envoy chose created problems Relay avoids.</div>
+    <div class="comparison">
+      <div class="cmp-col theirs">
+        <div class="cmp-label">Envoy's approach</div>
+        <div class="cmp-title">WhatsApp-native agent</div>
+        <ul class="cmp-list">
+          <li class="bad">WhatsApp via web emulation — Meta can break it without notice</li>
+          <li class="bad">Full agent with no scope discipline — "focus constraints as pricing lever"</li>
+          <li class="bad">One server per founder = linear infrastructure cost</li>
+          <li class="bad">No data model = intelligence claims unverifiable</li>
+          <li class="bad">No cold start answer — starts from zero</li>
+        </ul>
+      </div>
+      <div class="cmp-col ours">
+        <div class="cmp-label">Relay's approach</div>
+        <div class="cmp-title">SMS/iMessage retrieval layer</div>
+        <ul class="cmp-list">
+          <li class="good">SMS via Twilio — 100% platform reliability, no third-party risk</li>
+          <li class="good">Narrowly scoped to Output C: retrieval + Y/N on pre-queued actions</li>
+          <li class="good">Shared number, LLM per message — cost: ~₹0.65/message at scale</li>
+          <li class="good">Reads directly from the existing data model — same intelligence as the app</li>
+          <li class="good">Cold start solved by the core MVP — SMS accesses what's already there</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE MOMENTS THAT MATTER -->
+  <div class="demo-section">
+    <div class="section-title">The moments where this matters</div>
+    <div class="section-sub">On-demand retrieval in the web app is correct design for the desk. SMS is correct design for everywhere else.</div>
+    <div class="moment-cards">
+      <div class="moment-card mc-highlight">
+        <div class="mc-emoji">🚕</div>
+        <div class="mc-title">In a cab, 10 minutes before a call</div>
+        <div class="mc-text">"What did Priya ask me to send?" — answered before you arrive, without opening a laptop.</div>
+      </div>
+      <div class="moment-card mc-highlight">
+        <div class="mc-emoji">🚶</div>
+        <div class="mc-title">Walking to a meeting</div>
+        <div class="mc-text">"What's the status of the Acme deal?" — answered while walking, one-handed, no navigation.</div>
+      </div>
+      <div class="moment-card mc-highlight">
+        <div class="mc-emoji">🤝</div>
+        <div class="mc-title">At a conference, someone mentions a prospect</div>
+        <div class="mc-text">"When did I last talk to Marcus?" — answered before the conversation continues.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE DEMO -->
+  <div class="demo-section">
+    <div class="section-title">Interactive demo — try every scenario</div>
+    <div class="section-sub">The phone on the left is live. Type in the input, or click any scenario below to load a pre-built conversation. Then see the full explanation of what happened and why.</div>
+
+    <div class="demo-grid">
+
+      <!-- PHONE -->
+      <div class="phone-sticky">
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="imsg-header">
+              <span class="imsg-back">‹</span>
+              <div class="imsg-avatar">R</div>
+              <div>
+                <div class="imsg-name">Relay</div>
+                <div class="imsg-sub">+91 98765 00000 · relay.app</div>
+              </div>
+            </div>
+            <div class="imsg-messages" id="msg-list">
+              <div class="imsg-time">Tue 11 Mar · 1:47 PM</div>
+              <div class="bubble in">Hi — I'm Relay. Text me any question about your deals. Try:<br><br>• "What's the status of Priya?"<br>• "Who should I follow up with today?"<br>• "Snooze Priya for 3 days"</div>
+            </div>
+            <div class="imsg-footer">
+              <input class="imsg-input" id="sms-input" placeholder="Message Relay…" onkeydown="if(event.key==='Enter')sendMsg()">
+              <button class="imsg-send" onclick="sendMsg()">↑</button>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:11.5px;color:var(--ink-3)">Or click a scenario below →</div>
+      </div>
+
+      <!-- SCENARIOS -->
+      <div class="scenario-panel" id="scenarios">
+
+        <!-- SCENARIO 1 -->
+        <div style="background:var(--parch-2);border-radius:var(--r-sm);padding:8px 12px;font-size:11.5px;color:var(--ink-3);margin-bottom:14px">
+          Click any scenario to load it into the phone and see the full explanation
+        </div>
+
+        <div class="scenario-head first" id="sh-0" onclick="toggleScenario(0)">
+          <div class="sh-num">1</div>
+          <div class="sh-title">"What's the status of Priya at Acme?"</div>
+          <span class="sh-tag tag-retrieval">Retrieval</span>
+        </div>
+
+        <div class="scenario-head" id="sh-1" onclick="toggleScenario(1)" style="border-radius:var(--r) var(--r) 0 0">
+          <div class="sh-num">2</div>
+          <div class="sh-title">"What did Priya ask me to send her?"</div>
+          <span class="sh-tag tag-retrieval">Retrieval</span>
+        </div>
+        <div class="scenario-body" id="sb-1">
+          <div class="sb-explain">The founder is asking about a specific commitment they made. Relay scans the activity timeline for outbound commitment signals — things the founder said they'd do. This is one of the highest-value retrieval queries because it closes the "I forgot what I promised" gap that kills deals.</div>
+          <div class="sb-query-label">What you text</div>
+          <div class="sb-query-example">What did Priya ask me to send her?</div>
+          <div class="sb-query-label">What Relay replies</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 2 seconds</div>
+            <div class="sr-text">Priya asked 4 things on 20 Feb: API rate limits, SLA uptime guarantee, data residency region, and minimum seats for annual contract.
+
+You replied to all 4 on 28 Feb. But you also promised on the 26 Feb call to send a renewal case study — that hasn't been sent yet. No email with attachment detected after that date.
+
+Want me to surface the follow-up? Reply Y.</div>
+          </div>
+          <div class="sb-what-happened">
+            <div class="swh-label">How Relay answered this</div>
+            LLM scanned the full Activity timeline for commitment signals — specifically outbound commitments made by the founder. Found 2: the 28 Feb reply (sent) and the "renewal case study" promise (not sent). Distinguished between resolved and unresolved commitments. Suggested an action without being asked.
+          </div>
+          <button class="try-it-btn" onclick="loadScenario(1)">Load this into the phone →</button>
+        </div>
+
+        <div class="scenario-head" id="sh-2" onclick="toggleScenario(2)" style="border-radius:0">
+          <div class="sh-num">3</div>
+          <div class="sh-title">"Who should I follow up with today?"</div>
+          <span class="sh-tag tag-retrieval">Retrieval</span>
+        </div>
+        <div class="scenario-body" id="sb-2">
+          <div class="sb-explain">The full Today view — condensed to 3 lines, from a text. This is the commute-friendly version of the morning digest. The digest is structured and exhaustive; this is a quick scan to know where to focus.</div>
+          <div class="sb-query-label">What you text</div>
+          <div class="sb-query-example">Who should I follow up with today?</div>
+          <div class="sb-query-label">What Relay replies</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 2 seconds</div>
+            <div class="sr-text">Top 3 today:
+1. Priya (Acme) — 18d quiet, cooling. Draft ready to send.
+2. James (FinStack) — replied yesterday, momentum accelerating.
+3. Vikram (Nexus) — 9d, qualified, slowing.
+
+Full Today view: relay.app/today</div>
+          </div>
+          <div class="sb-what-happened">
+            <div class="swh-label">How Relay answered this</div>
+            Read the top 3 Action items from the current Today view, ordered by urgency_score. Summarised each in one line with the key signal. Deliberately brief — forces the full app for anything more detailed. Deep link at the end.
+          </div>
+          <button class="try-it-btn" onclick="loadScenario(2)">Load this into the phone →</button>
+        </div>
+
+        <div class="scenario-head" id="sh-3" onclick="toggleScenario(3)" style="border-radius:0">
+          <div class="sh-num">4</div>
+          <div class="sh-title">"Snooze Priya for 3 days" — one-tap action</div>
+          <span class="sh-tag tag-action">Action</span>
+        </div>
+        <div class="scenario-body" id="sb-3">
+          <div class="sb-explain">SMS isn't just for retrieval — it can execute a small, scoped set of actions that map directly to the Today view. Snooze is the most common: the founder knows they'll follow up, just not today. One text does it without opening the app. Relay confirms with the exact wake-up date.</div>
+          <div class="sb-query-label">What you text</div>
+          <div class="sb-query-example">Snooze Priya for 3 days</div>
+          <div class="sb-query-label">What Relay replies</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 1 second</div>
+            <div class="sr-text">Done. Priya Sharma (Acme) follow-up snoozed until Friday 14 Mar, 8am.
+
+She'll resurface in your digest and Today view then. ✓</div>
+          </div>
+          <div class="sb-what-happened">
+            <div class="swh-label">What happened in the data model</div>
+            Found the active follow_up Action for Priya Sharma. Updated status: snoozed. Set snooze_until: 2026-03-14 08:00. Contact removed from Today view. Will reappear automatically on wake date. Notion write-back not triggered (snooze is internal Relay state only).
+          </div>
+          <button class="try-it-btn" onclick="loadScenario(3)">Load this into the phone →</button>
+        </div>
+
+        <div class="scenario-head" id="sh-4" onclick="toggleScenario(4)" style="border-radius:0">
+          <div class="sh-num">5</div>
+          <div class="sh-title">"Send the draft to Marcus" → Y to confirm</div>
+          <span class="sh-tag tag-action">Action</span>
+        </div>
+        <div class="scenario-body" id="sb-4">
+          <div class="sb-explain">A draft is sitting in the queue — written after a post-calendar-meeting trigger. The founder texts Relay to check, sees the draft is ready, and confirms with a single "Y". Relay fires the email. This is the highest-value action available via SMS — no app, no compose screen, no copy-paste.</div>
+          <div class="sb-query-label">What you text</div>
+          <div class="sb-query-example">Is the Marcus draft ready to send?</div>
+          <div class="sb-query-label">What Relay replies</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 2 seconds</div>
+            <div class="sr-text">Yes — draft ready for Marcus Rodriguez (TechCorp). Subject: "Following up — our call today"
+
+Covers: API docs + co-founder intro on 24 Mar.
+
+Send now? Reply Y to confirm, N to skip.</div>
+          </div>
+          <div class="sb-query-label" style="margin-top:12px">You reply</div>
+          <div class="sb-query-example">Y</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 1 second</div>
+            <div class="sr-text">✓ Sent. Email delivered to <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a5c8c4d7c6d0d6e5d1c0c6cdc6cad7d58bccca">[email&#160;protected]</a>
+
+Activity updated. Follow-up cleared from Today view.</div>
+          </div>
+          <div class="sb-what-happened">
+            <div class="swh-label">What happened in the data model</div>
+            Draft object status updated: sent. Email dispatched via SMTP. Activity created: email_sent. Follow-up Action status: completed. Notion write-back queued: "11 Mar — follow-up sent post-call." Today view badge decremented.
+          </div>
+          <button class="try-it-btn" onclick="loadScenario(4)">Load this into the phone →</button>
+        </div>
+
+        <div class="scenario-head" id="sh-5" onclick="toggleScenario(5)" style="border-radius:0 0 var(--r) var(--r)">
+          <div class="sh-num">6</div>
+          <div class="sh-title">"Book me a meeting with Priya" — out of scope</div>
+          <span class="sh-tag tag-scope">Out of scope</span>
+        </div>
+        <div class="scenario-body" id="sb-5">
+          <div class="sb-explain">This is Envoy's failure mode — no scope discipline meant the agent tried to do everything and became unpredictable. Relay's SMS interface has hard scope limits encoded at the LLM system prompt level. When something is out of scope, Relay says so directly — and redirects to something useful.</div>
+          <div class="sb-query-label">What you text</div>
+          <div class="sb-query-example">Book me a meeting with Priya next Tuesday</div>
+          <div class="sb-query-label">What Relay replies</div>
+          <div class="sb-response">
+            <div class="sr-label">Relay · 1 second</div>
+            <div class="sr-text">I can't book meetings from here — try Calendly or your calendar app for that.
+
+What I can do: you have an open follow-up with Priya (18d silent, cooling). Want me to surface the draft? Reply Y.</div>
+          </div>
+          <div class="sb-what-happened">
+            <div class="swh-label">Why this scope boundary matters</div>
+            The LLM system prompt for SMS responses explicitly lists what is and isn't in scope. Calendar management, email composition from scratch, new deal creation, and general questions are all blocked. The rejection is never a dead end — it always redirects to something Relay can do. This is what Envoy didn't build.
+          </div>
+          <button class="try-it-btn" onclick="loadScenario(5)">Load this into the phone →</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCENARIO 0 body (standalone, shown when clicked) -->
+    <div id="sb-0-full" style="background:var(--surface);border:1.5px solid var(--blue);border-radius:var(--r);padding:18px 20px;margin-top:14px;display:none">
+      <div class="sb-explain">The most common query — the founder is about to talk to someone and needs a quick status check. Relay compresses the full deal record into 3–4 sentences, leading with the most actionable signal, ending with a link to the full record and a suggested action.</div>
+      <div class="sb-query-label">What you text</div>
+      <div class="sb-query-example">What's the status of Priya at Acme?</div>
+      <div class="sb-query-label">What Relay replies</div>
+      <div class="sb-response">
+        <div class="sr-label">Relay · 2 seconds</div>
+        <div class="sr-text">Priya Sharma (Acme) — Proposal Out, Cooling. 18 days silent since you sent pricing. Proposal opened 3× and forwarded — internal review likely in progress. Stage mismatch flagged: your Notion shows "Proposal Sent" but signals say she's still in conversation.
+
+Follow up now? Reply Y. Full record: relay.app/acme</div>
+      </div>
+      <div class="sb-what-happened">
+        <div class="swh-label">How Relay built this answer</div>
+        Looked up Priya Sharma in the Contact + Deal objects. Read: warmth_score (Cooling), silence_gap_days (18), stage (Proposal Out), stage_mismatch_flag (true). Fetched most recent Activity summary. Composed a response leading with the most actionable signal (silence + mismatch), not the most recent event. Offered a specific next step.
+      </div>
+      <button class="try-it-btn" onclick="loadScenario(0)">Load this into the phone →</button>
+    </div>
+  </div>
+
+  <!-- SCOPE BOUNDARY -->
+  <div class="demo-section">
+    <div class="section-title">Exact scope — what SMS can and can't do</div>
+    <div class="section-sub">This is how Relay avoids Envoy's scope creep problem. The boundary is encoded at the system prompt level, not enforced by convention.</div>
+    <div class="scope-section">
+      <div class="scope-header"><h3>SMS interface scope boundary</h3></div>
+      <div class="scope-body">
+        <div class="scope-can">
+          <div class="scope-col-label">Can do via SMS</div>
+          <ul class="scope-list">
+            <li>Deal/contact status query (any contact by name or company)</li>
+            <li>"What did [name] ask me to send?"</li>
+            <li>"Who should I follow up with today?"</li>
+            <li>"What's in my pipeline right now?"</li>
+            <li>"When did I last talk to [name]?"</li>
+            <li>Snooze a follow-up (default 2d, or specify days)</li>
+            <li>Mark an action as completed</li>
+            <li>Confirm a queued draft send (Y/N)</li>
+            <li>Confirm a stage change suggestion (Y/N)</li>
+          </ul>
+        </div>
+        <div class="scope-cant">
+          <div class="scope-col-label">Cannot do via SMS</div>
+          <ul class="scope-list">
+            <li>Book or cancel calendar meetings</li>
+            <li>Compose a new email from scratch</li>
+            <li>Create a new deal or contact</li>
+            <li>Answer general business questions</li>
+            <li>Write or edit pipeline notes</li>
+            <li>Access Notion directly</li>
+            <li>Change deal stage without Pending approval</li>
+            <li>Send attachments or files</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMS vs DIGEST -->
+  <div class="demo-section">
+    <div class="section-title">SMS vs Morning digest — they don't compete</div>
+    <div class="section-sub">The digest is proactive and structured, delivered once at 7am. SMS is reactive and conversational, available any time. They serve different moments in the founder's day.</div>
+    <div class="channel-compare">
+      <div class="cc-card">
+        <div class="cc-title">Morning email digest</div>
+        <div class="cc-row"><span class="cc-key">When</span><span class="cc-val">Once · 7am · proactive</span></div>
+        <div class="cc-row"><span class="cc-key">Who initiates</span><span class="cc-val">Relay pushes to you</span></div>
+        <div class="cc-row"><span class="cc-key">Where the founder is</span><span class="cc-val">At desk, starting the day</span></div>
+        <div class="cc-row"><span class="cc-key">Format</span><span class="cc-val">Structured, all items</span></div>
+        <div class="cc-row"><span class="cc-key">App needed?</span><span class="cc-val">No (low-stakes actions)</span></div>
+        <div class="cc-row"><span class="cc-key">Best for</span><span class="cc-val">Daily planning</span></div>
+      </div>
+      <div class="cc-card">
+        <div class="cc-title">SMS on-demand</div>
+        <div class="cc-row"><span class="cc-key">When</span><span class="cc-val">Any time · reactive</span></div>
+        <div class="cc-row"><span class="cc-key">Who initiates</span><span class="cc-val">Founder texts Relay</span></div>
+        <div class="cc-row"><span class="cc-key">Where the founder is</span><span class="cc-val">Mobile, mid-day, pre-meeting</span></div>
+        <div class="cc-row"><span class="cc-key">Format</span><span class="cc-val">Conversational, one question</span></div>
+        <div class="cc-row"><span class="cc-key">App needed?</span><span class="cc-val">No (retrieval + Y/N)</span></div>
+        <div class="cc-row"><span class="cc-key">Best for</span><span class="cc-val">Pre-meeting context checks</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPACT -->
+  <div class="demo-section">
+    <div class="section-title">What this closes</div>
+    <div class="impact-grid">
+      <div class="impact-card"><div class="ic-num blue">100%</div><div class="ic-label">Of retrieval now accessible from any phone, any location, no app</div></div>
+      <div class="impact-card"><div class="ic-num green">~₹0.65</div><div class="ic-label">Cost per message at scale via Twilio — negligible at any non-free pricing tier</div></div>
+      <div class="impact-card"><div class="ic-num">0</div><div class="ic-label">New app installs required — SMS/iMessage already on every phone</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- PROTO NAV -->
+<div class="proto-nav">
+  <span class="pnav-label">DEMOS →</span>
+  <button class="pnav-btn" onclick="window.location.href='relay-addition-1-postcall.html'">Addition 1 · Post-call capture</button>
+  <button class="pnav-btn active">Addition 2 · SMS retrieval</button>
+  <button class="pnav-btn" onclick="window.location.href='relay-ux-complete.html'">Full prototype</button>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+/* SCENARIO DATA */
+const scenarios = [
+  {
+    query: "What's the status of Priya at Acme?",
+    reply: "Priya Sharma (Acme) — Proposal Out, Cooling. 18 days silent since you sent pricing. Proposal opened 3× and forwarded — internal review likely in progress. Stage mismatch flagged: your Notion shows \"Proposal Sent\" but signals say she's still in conversation.\n\nFollow up now? Reply Y. Full record: relay.app/acme",
+    action: null
+  },
+  {
+    query: "What did Priya ask me to send her?",
+    reply: "Priya asked 4 things on 20 Feb: API rate limits, SLA uptime guarantee, data residency region, and minimum seats for annual contract.\n\nYou replied to all 4 on 28 Feb. But you also promised on the 26 Feb call to send a renewal case study — that hasn't been sent yet.\n\nWant me to surface the follow-up? Reply Y.",
+    action: { prompt: "Y", response: "Follow-up queued in Today view. ✓\nrelay.app/priya" }
+  },
+  {
+    query: "Who should I follow up with today?",
+    reply: "Top 3 today:\n1. Priya (Acme) — 18d quiet, cooling. Draft ready.\n2. James (FinStack) — replied yesterday, momentum accelerating.\n3. Vikram (Nexus) — 9d, qualified, slowing.\n\nFull Today view: relay.app/today",
+    action: null
+  },
+  {
+    query: "Snooze Priya for 3 days",
+    reply: "Done. Priya Sharma (Acme) follow-up snoozed until Friday 14 Mar, 8am.\n\nShe'll resurface in your digest and Today view then. ✓",
+    action: null
+  },
+  {
+    query: "Is the Marcus draft ready to send?",
+    reply: "Yes — draft ready for Marcus Rodriguez (TechCorp). Subject: \"Following up — our call today\"\n\nCovers: API docs + co-founder intro on 24 Mar.\n\nSend now? Reply Y to confirm, N to skip.",
+    action: { prompt: "Y", response: "✓ Sent. Email delivered to marcus@techcorp.io\n\nActivity updated. Follow-up cleared from Today view." }
+  },
+  {
+    query: "Book me a meeting with Priya next Tuesday",
+    reply: "I can't book meetings from here — try Calendly or your calendar app for that.\n\nWhat I can do: you have an open follow-up with Priya (18d silent, cooling). Want me to surface the draft? Reply Y.",
+    action: null
+  }
+];
+
+let openScenario = -1;
+let awaitingAction = null;
+
+function toggleScenario(idx) {
+  // Scenario 0 uses a different DOM structure
+  if (idx === 0) {
+    const el = document.getElementById('sb-0-full');
+    const head = document.getElementById('sh-0');
+    if (el.style.display === 'none' || el.style.display === '') {
+      el.style.display = 'block';
+      head.classList.add('active');
+    } else {
+      el.style.display = 'none';
+      head.classList.remove('active');
+    }
+    return;
+  }
+  const body = document.getElementById('sb-' + idx);
+  const head = document.getElementById('sh-' + idx);
+  if (!body) return;
+  const isOpen = body.classList.contains('open');
+  // Close all
+  for (let i=1;i<=5;i++) {
+    const b = document.getElementById('sb-'+i);
+    const h = document.getElementById('sh-'+i);
+    if (b) b.classList.remove('open');
+    if (h) h.classList.remove('active');
+  }
+  if (!isOpen) {
+    body.classList.add('open');
+    head.classList.add('active');
+  }
+}
+
+function loadScenario(idx) {
+  const s = scenarios[idx];
+  const list = document.getElementById('msg-list');
+  // Clear previous
+  list.innerHTML = '<div class="imsg-time">Tue 11 Mar · ' + getTime() + '</div>';
+  // Add outbound
+  addBubble('out', s.query);
+  // Add reply after delay
+  setTimeout(() => {
+    addBubble('in', s.reply);
+    if (s.action) {
+      awaitingAction = s.action;
+      // Add hint
+      setTimeout(() => {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:11.5px;color:#8E8E93;text-align:center;padding:4px 0';
+        hint.textContent = 'Type "Y" or tap send to confirm';
+        list.appendChild(hint);
+        list.scrollTop = list.scrollHeight;
+      }, 400);
+    }
+    list.scrollTop = list.scrollHeight;
+  }, 1200);
+  toast('Scenario loaded into the phone →');
+}
+
+function addBubble(dir, text) {
+  const list = document.getElementById('msg-list');
+  const b = document.createElement('div');
+  b.className = 'bubble ' + dir;
+  b.textContent = text;
+  list.appendChild(b);
+  list.scrollTop = list.scrollHeight;
+}
+
+function sendMsg() {
+  const input = document.getElementById('sms-input');
+  const q = input.value.trim();
+  if (!q) return;
+  const list = document.getElementById('msg-list');
+  addBubble('out', q);
+  input.value = '';
+
+  // Check if awaiting action confirmation
+  if (awaitingAction && (q.toLowerCase() === 'y' || q.toLowerCase() === 'yes')) {
+    setTimeout(() => {
+      addBubble('in', awaitingAction.response);
+      awaitingAction = null;
+      list.scrollTop = list.scrollHeight;
+    }, 800);
+    return;
+  }
+  awaitingAction = null;
+
+  // Match to a scenario
+  const lower = q.toLowerCase();
+  let matched = null;
+  if (lower.includes('priya') && (lower.includes('status') || lower.includes('acme'))) matched = 0;
+  else if (lower.includes('send') || lower.includes('ask')) matched = 1;
+  else if (lower.includes('follow') || lower.includes('today')) matched = 2;
+  else if (lower.includes('snooze') || lower.includes('3 day')) matched = 3;
+  else if (lower.includes('marcus') || lower.includes('draft')) matched = 4;
+  else if (lower.includes('book') || lower.includes('meeting') || lower.includes('schedule')) matched = 5;
+  else if (lower.includes('pipeline') || lower.includes('deals')) {
+    setTimeout(() => { addBubble('in', '18 active deals. On Radar: 4 · In Conversation: 5 · Qualified: 3 · Proposal Out: 4 · Closing: 2.\n\nFull view: relay.app/pipeline'); list.scrollTop = list.scrollHeight; }, 1000);
+    return;
+  }
+
+  if (matched !== null) {
+    const s = scenarios[matched];
+    setTimeout(() => {
+      addBubble('in', s.reply);
+      if (s.action) awaitingAction = s.action;
+      list.scrollTop = list.scrollHeight;
+    }, 1100);
+  } else {
+    setTimeout(() => {
+      addBubble('in', "I can help with: deal status, follow-up list, pipeline summary, snoozing contacts, and confirming drafts.\n\nTry: \"What's the status of [name]?\" or \"Who should I follow up with today?\"");
+      list.scrollTop = list.scrollHeight;
+    }, 900);
+  }
+}
+
+function getTime() {
+  const now = new Date();
+  return now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ' ' + (now.getHours() >= 12 ? 'PM' : 'AM');
+}
+
+let toastT;
+function toast(msg) {
+  const t = d
