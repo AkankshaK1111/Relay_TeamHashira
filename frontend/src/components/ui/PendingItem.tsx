@@ -90,7 +90,7 @@ export default function PendingItem({ action, onApprove, onReject }: PendingItem
           <p className="text-sm text-gray-600 leading-relaxed mt-1">{action.description}</p>
 
           {/* Payload details */}
-          {action.action_type === 'stage_change' && action.payload.from_stage && (
+          {action.action_type === 'stage_change' && !!action.payload.from_stage && (
             <div className="flex items-center gap-2 mt-2 text-xs">
               <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">
                 {action.payload.from_stage as string}

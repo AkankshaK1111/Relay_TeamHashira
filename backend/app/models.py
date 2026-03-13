@@ -161,7 +161,7 @@ class ActivityLog(Base):
     entity_type = Column(String(50), nullable=False)  # deal, contact, email, meeting
     entity_id = Column(UUID(as_uuid=False), nullable=True)
     action = Column(String(255), nullable=False)
-    metadata = Column(JSON, nullable=True)
+    extra_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="activity_logs")
