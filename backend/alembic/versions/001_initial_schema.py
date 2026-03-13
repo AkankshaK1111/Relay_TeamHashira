@@ -134,7 +134,7 @@ def upgrade() -> None:
         sa.Column('entity_type', sa.String(50), nullable=False),
         sa.Column('entity_id', sa.String(36), nullable=True),
         sa.Column('action', sa.String(255), nullable=False),
-        sa.Column('metadata', JSON, nullable=True),
+        sa.Column('extra_data', JSON, nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
     )
 

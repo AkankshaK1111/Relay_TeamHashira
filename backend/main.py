@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.database import engine, Base
 from app.routers import auth, users, integrations, gmail, calendar, notion, deals, contacts, today, pending, demo
+from app.config import settings
 
 
 @asynccontextmanager
@@ -20,14 +21,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — include the deployed frontend URL from env (set FRONTEND_URL in Railway)
+_cors_origins = list({
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    settings.FRONTEND_URL,
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://relay.app",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
