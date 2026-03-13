@@ -5,9 +5,10 @@
 **Relay** is an AI-powered founder CRM for deal memory and follow-up intelligence. It helps founders track warm relationships, infer when to follow up, and avoid letting deals go cold — without reading email bodies.
 
 **Structure**: Monorepo
-- `relay/backend/` — FastAPI Python API
-- `relay/frontend/` — Next.js TypeScript web app
-- `docker-compose.yml` — Orchestrates backend + frontend + PostgreSQL
+- `backend/` — FastAPI Python API
+- `frontend/` — Next.js TypeScript web app
+- `reference/` — UX specs, backend flow docs, post-call HTML mocks
+- `docker-compose.yml` — Orchestrates backend + frontend + PostgreSQL (local only)
 
 ---
 
@@ -15,7 +16,7 @@
 
 ### Backend
 ```bash
-cd relay/backend
+cd backend
 pip install -r requirements.txt
 alembic upgrade head          # Run DB migrations
 uvicorn main:app --reload     # Dev server at http://localhost:8000
@@ -23,7 +24,7 @@ uvicorn main:app --reload     # Dev server at http://localhost:8000
 
 ### Frontend
 ```bash
-cd relay/frontend
+cd frontend
 npm install
 npm run dev                   # Dev server at http://localhost:3000
 npm run build
@@ -37,11 +38,12 @@ docker-compose down
 ```
 
 ### Environment Setup
-Copy `.env.example` to `.env` at the root and in `relay/backend/`. Required variables:
+Copy `.env.example` to `.env` at the root and in `backend/`. Required variables:
 - `DATABASE_URL`, `SECRET_KEY`, `ENCRYPTION_KEY`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
 - `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`
 - `FRONTEND_URL`
+- `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (frontend build-time only)
 
 ---
 
@@ -63,7 +65,7 @@ Copy `.env.example` to `.env` at the root and in `relay/backend/`. Required vari
 ### Frontend
 | Tech | Version | Purpose |
 |------|---------|---------|
-| Next.js | 14 | App Router, SSR/CSR |
+| Next.js | 14.2.35 | App Router, SSR/CSR |
 | React | 18.3 | UI |
 | TypeScript | 5.4 | Type safety |
 | Tailwind CSS | 3.4 | Styling |
@@ -194,6 +196,43 @@ Tailwind custom colors for warmth:
 
 ---
 
+## Deployment (Railway)
+
+Deployed at: **https://splendid-grace-production.up.railway.app** (frontend)
+
+### Services
+| Service | Root Dir | Builder |
+|---------|----------|---------|
+| backend | `backend/` | `backend/Dockerfile` |
+| frontend | `frontend/` | `frontend/Dockerfile` |
+| postgres | — | Railway PostgreSQL plugin |
+
+### Backend env vars (set in Railway Variables tab)
+| Var | Notes |
+|-----|-------|
+| `DATABASE_URL` | Reference: `${{Postgres.DATABASE_URL}}` |
+| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `ENCRYPTION_KEY` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
+| `GOOGLE_REDIRECT_URI` | `https://<backend-domain>/api/auth/google/callback` |
+| `NOTION_CLIENT_ID` | From notion.so/my-integrations |
+| `NOTION_CLIENT_SECRET` | From notion.so/my-integrations |
+| `FRONTEND_URL` | Frontend Railway domain (for CORS) |
+
+### Frontend env vars (baked in at build time — redeploy after changing)
+| Var | Notes |
+|-----|-------|
+| `NEXT_PUBLIC_API_URL` | Backend Railway domain, no trailing slash |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Same Google client ID as backend |
+
+### Deploy flow
+- Push to `main` → Railway auto-redeploys both services
+- Backend runs `alembic upgrade head` before uvicorn starts (no manual migration needed)
+- `NEXT_PUBLIC_*` vars are baked at build time — changing them requires a redeploy
+
+---
+
 ## Updating This File
 
 Update CLAUDE.md whenever:
@@ -202,3 +241,4 @@ Update CLAUDE.md whenever:
 - Conventions or privacy rules change
 - New integrations are added
 - Database schema changes (new Alembic migration)
+- Deployment config or Railway services change
